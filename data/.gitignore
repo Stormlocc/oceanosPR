@@ -1,0 +1,7 @@
+*
+!.gitignore
+!raw/
+!intermediate/
+!products/
+!catalog/
+

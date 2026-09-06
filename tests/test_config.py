@@ -1,0 +1,59 @@
+"""Tests for typed configuration loading and path semantics."""
+
+from pathlib import Path
+
+import pytest
+
+from oceanos.config import ConfigurationError, load_config
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_mvp_configuration_loads() -> None:
+    settings = load_config(PROJECT_ROOT / "configs" / "mvp.yaml")
+
+    assert settings.project_name == "NASA OCEANOS Puerto Rico"
+    assert settings.default_crs == "EPSG:4326"
+
+
+def test_relative_paths_resolve_from_project_and_data_root() -> None:
+    settings = load_config(PROJECT_ROOT / "configs" / "mvp.yaml")
+    expected_data_root = (PROJECT_ROOT / "data").resolve()
+
+    assert settings.data_root == expected_data_root
+    assert settings.raw_dir == expected_data_root / "raw"
+    assert settings.intermediate_dir == expected_data_root / "intermediate"
+    assert settings.products_dir == expected_data_root / "products"
+    assert settings.catalog_dir == expected_data_root / "catalog"
+
+
+def test_environment_overrides_yaml(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    overridden_root = tmp_path / "external-data"
+    monkeypatch.setenv("OCEANOS_DATA_ROOT", str(overridden_root))
+    monkeypatch.setenv("OCEANOS_DEFAULT_CRS", "EPSG:6566")
+
+    settings = load_config(PROJECT_ROOT / "configs" / "mvp.yaml")
+
+    assert settings.data_root == overridden_root.resolve()
+    assert settings.raw_dir == overridden_root.resolve() / "raw"
+    assert settings.default_crs == "EPSG:6566"
+
+
+def test_missing_configuration_has_explicit_error(tmp_path: Path) -> None:
+    with pytest.raises(ConfigurationError, match="does not exist"):
+        load_config(tmp_path / "missing.yaml")
+
+
+
+def test_aoi_configuration_path_and_nested_override(monkeypatch, tmp_path):
+    monkeypatch.setenv("OCEANOS_AOI__TARGET_CRS", "EPSG:3857")
+    settings = load_config(PROJECT_ROOT / "configs/mvp.yaml", base_dir=tmp_path)
+    assert settings.aoi.path == tmp_path / "configs/aoi/la_parguera_mvp.geojson"
+    assert settings.aoi.target_crs == "EPSG:3857"
+
+
+@pytest.mark.parametrize("field,value", [("name", " "), ("path", ""), ("target_crs", "invalid")])
+def test_invalid_aoi_configuration(monkeypatch, field, value):
+    monkeypatch.setenv(f"OCEANOS_AOI__{field.upper()}", value)
+    with pytest.raises(ConfigurationError):
+        load_config(PROJECT_ROOT / "configs/mvp.yaml")

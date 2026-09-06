@@ -1,0 +1,12 @@
+{
+  "type": "Feature",
+  "properties": {
+    "name": "La Parguera — MVP example",
+    "purpose": "MVP configuration only: approximate rectangular coastal AOI, not an official or scientifically validated boundary. Replace through configs/mvp.yaml.",
+    "boundary_status": "illustrative_unverified"
+  },
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [[[-67.10, 17.90], [-66.95, 17.90], [-66.95, 18.00], [-67.10, 18.00], [-67.10, 17.90]]]
+  }
+}

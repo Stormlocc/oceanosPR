@@ -1,0 +1,13 @@
+project_name: "NASA OCEANOS Puerto Rico"
+data_root: "data"
+raw_dir: "raw"
+intermediate_dir: "intermediate"
+products_dir: "products"
+catalog_dir: "catalog"
+default_crs: "EPSG:4326" # mide en grados (esfera)
+
+# Approximate MVP example; replace this path to use a reviewed study boundary.
+aoi:
+  name: "La Parguera — MVP example"
+  path: "configs/aoi/la_parguera_mvp.geojson"
+  target_crs: "EPSG:32619" #mide en metros (plano) zona 19N
