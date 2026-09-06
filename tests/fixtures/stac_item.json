@@ -1,0 +1,30 @@
+{
+  "type": "Feature",
+  "stac_version": "1.0.0",
+  "stac_extensions": [],
+  "id": "S2A_SYNTHETIC_20240101",
+  "collection": "sentinel-2-l2a",
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]
+  },
+  "bbox": [0, 0, 1, 1],
+  "properties": {
+    "datetime": "2024-01-01T14:30:00Z",
+    "platform": "sentinel-2a",
+    "eo:cloud_cover": 12.5,
+    "provider:internal_value": "must not leak"
+  },
+  "links": [
+    {"rel": "self", "href": "https://catalog.example/collections/sentinel-2-l2a/items/S2A_SYNTHETIC_20240101"}
+  ],
+  "assets": {
+    "red": {
+      "href": "https://assets.example/synthetic/red.tif",
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "Red band (synthetic reference)",
+      "roles": ["data", "reflectance"],
+      "provider:internal_value": "must not leak"
+    }
+  }
+}

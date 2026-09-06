@@ -11,3 +11,12 @@ aoi:
   name: "La Parguera — MVP example"
   path: "configs/aoi/la_parguera_mvp.geojson"
   target_crs: "EPSG:32619" #mide en metros (plano) zona 19N
+
+# Metadata discovery only; asset URLs are listed but never downloaded.
+scenes:
+  catalog_url: "https://earth-search.aws.element84.com/v1"
+  collection: "sentinel-2-l2a"
+  cloud_cover_max: null
+  timeout: 30
+  max_retries: 2
+  page_size: 100

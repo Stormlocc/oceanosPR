@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import ClassVar
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pyproj import CRS
 from pyproj.exceptions import CRSError
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
@@ -46,6 +46,36 @@ class AOISettings(BaseModel):
         return crs.to_string()
 
 
+class SceneSearchSettings(BaseModel):
+    """STAC discovery defaults; configurable without changing provider code."""
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+
+    catalog_url: str = "https://earth-search.aws.element84.com/v1"
+    collection: str = Field(default="sentinel-2-l2a", min_length=1)
+    cloud_cover_max: float | None = Field(default=None, ge=0, le=100)
+    timeout: float = Field(default=30, gt=0)
+    max_retries: int = Field(default=2, ge=0, le=5)
+    page_size: int = Field(default=100, ge=1, le=10000)
+
+    @field_validator("catalog_url")
+    @classmethod
+    def catalog_root(cls, value: str) -> str:
+        from urllib.parse import urlsplit
+
+        parsed = urlsplit(value)
+        if parsed.scheme not in ("http", "https") or not parsed.netloc or parsed.query or parsed.fragment:
+            raise ValueError("catalog_url must be an HTTP(S) catalog root URL without query or fragment")
+        return value.rstrip("/")
+
+    @field_validator("collection")
+    @classmethod
+    def collection_name(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("collection must not be blank")
+        return value.strip()
+
+
 class OceanosSettings(BaseSettings):
     """Validated settings shared by OCEANOS components.
 
@@ -68,6 +98,7 @@ class OceanosSettings(BaseSettings):
     catalog_dir: Path
     default_crs: str
     aoi: AOISettings
+    scenes: SceneSearchSettings = Field(default_factory=SceneSearchSettings)
 
     @field_validator("project_name", "default_crs")
     @classmethod

@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0",
+  "scenes": [
+    {
+      "scene_id": "S2A_SYNTHETIC_20240101",
+      "collection": "sentinel-2-l2a",
+      "platform": "sentinel-2a",
+      "datetime": "2024-01-01T14:30:00Z",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              1.0,
+              0.0
+            ],
+            [
+              1.0,
+              1.0
+            ],
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.0,
+              0.0
+            ]
+          ]
+        ]
+      },
+      "bbox": [
+        0.0,
+        0.0,
+        1.0,
+        1.0
+      ],
+      "cloud_cover": 12.5,
+      "assets": {
+        "red": {
+          "href": "https://assets.example/synthetic/red.tif",
+          "media_type": "image/tiff; application=geotiff; profile=cloud-optimized",
+          "title": "Red band (synthetic reference)",
+          "roles": [
+            "data",
+            "reflectance"
+          ]
+        }
+      },
+      "source_catalog": "https://catalog.example"
+    }
+  ]
+}

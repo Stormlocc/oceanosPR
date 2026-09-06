@@ -57,3 +57,22 @@ def test_invalid_aoi_configuration(monkeypatch, field, value):
     monkeypatch.setenv(f"OCEANOS_AOI__{field.upper()}", value)
     with pytest.raises(ConfigurationError):
         load_config(PROJECT_ROOT / "configs/mvp.yaml")
+
+
+def test_scene_configuration_and_environment(monkeypatch):
+    monkeypatch.setenv("OCEANOS_SCENES__PAGE_SIZE", "10")
+    monkeypatch.setenv("OCEANOS_SCENES__CATALOG_URL", "https://catalog.example/v1")
+    settings = load_config(PROJECT_ROOT / "configs/mvp.yaml")
+    assert settings.scenes.page_size == 10
+    assert settings.scenes.catalog_url == "https://catalog.example/v1"
+    assert settings.scenes.collection == "sentinel-2-l2a"
+
+
+@pytest.mark.parametrize("field,value", [
+    ("TIMEOUT", "0"), ("MAX_RETRIES", "-1"), ("PAGE_SIZE", "0"),
+    ("CLOUD_COVER_MAX", "101"), ("CATALOG_URL", "file:///tmp/catalog"), ("COLLECTION", " "),
+])
+def test_invalid_scene_configuration(monkeypatch, field, value):
+    monkeypatch.setenv(f"OCEANOS_SCENES__{field}", value)
+    with pytest.raises(ConfigurationError):
+        load_config(PROJECT_ROOT / "configs/mvp.yaml")
