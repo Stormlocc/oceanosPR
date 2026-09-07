@@ -7,7 +7,10 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from oceanos.aoi import AOIError, get_bounds, load_aoi, validate_aoi
-from oceanos.catalog import SceneMetadata, SceneProviderError, SceneSearchResult, Sentinel2Provider
+from oceanos.catalog import (
+    LocalCatalogError, LocalSceneCatalog, SceneMetadata,
+    SceneProviderError, SceneSearchResult, Sentinel2Provider,
+)
 from oceanos.config import ConfigurationError, load_config
 
 
@@ -35,6 +38,14 @@ def build_parser() -> argparse.ArgumentParser:
     search.add_argument("--collection", help="Override the configured STAC collection")
     search.add_argument("--cloud-cover-max", type=float, help="Maximum scene cloud percentage (0–100)")
     search.add_argument("--output", type=Path, help="Write normalized scene metadata as JSON")
+    catalog = commands.add_parser("catalog", help="Maintain a local STAC scene catalog")
+    catalog_commands = catalog.add_subparsers(dest="catalog_command", required=True)
+    add = catalog_commands.add_parser("add", help="Register normalized scenes.json without downloads")
+    add.add_argument("scenes_file", type=Path)
+    listing = catalog_commands.add_parser("list", help="List registered scenes")
+    for command in (add, listing):
+        command.add_argument("--config", type=Path, default=Path("configs/mvp.yaml"))
+        command.add_argument("--catalog-dir", type=Path, help="Override the local catalog directory")
     return parser
 
 
@@ -93,6 +104,25 @@ def main(argv: Sequence[str] | None = None) -> int:
         _print_scenes(scenes)
         if args.output is not None:
             print(f"Normalized metadata saved to {args.output}")
+    elif args.command == "catalog":
+        try:
+            # Validate the whole input before creating or modifying a catalog.
+            result = None
+            if args.catalog_command == "add":
+                result = SceneSearchResult.model_validate_json(args.scenes_file.read_text(encoding="utf-8"))
+            settings = load_config(args.config)
+            catalog = LocalSceneCatalog(
+                args.catalog_dir if args.catalog_dir is not None else settings.catalog_dir,
+                collection_id=settings.scenes.collection,
+            )
+            if result is not None:
+                inserted = sum(catalog.add_scene(scene) for scene in result.scenes)
+                print(f"Added: {inserted}; already present: {len(result.scenes) - inserted}")
+                print(f"Local STAC catalog: {catalog.path}")
+            else:
+                _print_scenes(catalog.search_local_catalog())
+        except (ConfigurationError, LocalCatalogError, ValueError, OSError) as exc:
+            parser.exit(1, f"Error: {exc}\n")
     return 0
 
 

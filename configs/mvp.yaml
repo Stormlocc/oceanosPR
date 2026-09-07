@@ -3,7 +3,8 @@ data_root: "data"
 raw_dir: "raw"
 intermediate_dir: "intermediate"
 products_dir: "products"
-catalog_dir: "catalog"
+# Component paths resolve from data_root; this puts STAC at catalog/catalog.json.
+catalog_dir: "../catalog"
 default_crs: "EPSG:4326" # mide en grados (esfera)
 
 # Approximate MVP example; replace this path to use a reviewed study boundary.

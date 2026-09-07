@@ -24,7 +24,7 @@ def test_relative_paths_resolve_from_project_and_data_root() -> None:
     assert settings.raw_dir == expected_data_root / "raw"
     assert settings.intermediate_dir == expected_data_root / "intermediate"
     assert settings.products_dir == expected_data_root / "products"
-    assert settings.catalog_dir == expected_data_root / "catalog"
+    assert settings.catalog_dir == PROJECT_ROOT / "catalog"
 
 
 def test_environment_overrides_yaml(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

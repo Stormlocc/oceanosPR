@@ -135,3 +135,94 @@ ventana histórica corta. Esta fase no descarga bandas ni procesa rasters.
 
 Referencias del protocolo: [STAC Item Search y paginación](https://github.com/radiantearth/stac-api-spec/tree/main/item-search)
 y [colección Sentinel-2 L2A de Earth Search](https://earth-search.aws.element84.com/v1/collections/sentinel-2-l2a).
+
+## Fase 3: catálogo STAC local
+
+```bash
+python -m oceanos catalog add scenes.json
+python -m oceanos catalog list
+```
+
+`catalog add` recibe el JSON **normalizado de Fase 2**. El MVP guarda el catálogo
+en `catalog/catalog.json`, con una Collection inicial `sentinel-2-l2a`. Las
+escenas con otra colección conservan su ID de colección en una Collection
+separada. Se incluye un catálogo inicial vacío, sin importar los ejemplos
+sintéticos como si fueran observaciones reales.
+
+En `configs/mvp.yaml`, `catalog_dir: "../catalog"` se resuelve desde `data_root`
+para situar el catálogo en la raíz del proyecto. Puedes cambiarlo con
+`OCEANOS_CATALOG_DIR`, otro YAML (`--config`) o `--catalog-dir /ruta/catalogo`
+en cualquiera de los dos comandos. No se migra automáticamente el antiguo
+directorio vacío `data/catalog`.
+
+```text
+catalog/
+  catalog.json
+  collections/<hash de collection>/
+    collection.json
+    items/<hash de scene_id>.json
+```
+
+Los nombres de archivo usan SHA-256 para mantener rutas estables y admitir IDs
+con caracteres que no son seguros en rutas. Los IDs originales permanecen
+intactos dentro del STAC. Los enlaces entre documentos son relativos; todo el
+directorio puede copiarse y recargarse. Los assets conservan exactamente sus URLs,
+tipos MIME, títulos y roles, sin consultar ni descargar su contenido.
+
+La conversión conserva geometría, bbox, fecha UTC, plataforma, colección y
+nubosidad (`eo:cloud_cover`, con la extensión EO declarada cuando corresponde).
+La procedencia se añade separadamente:
+
+| Propiedad del Item | Significado |
+| --- | --- |
+| `oceanos:original_scene_id` | ID de la escena descubierta; coincide con `id`. |
+| `oceanos:source_catalog` | Catálogo remoto original. |
+| `oceanos:source_provider` | Adaptador de origen; por defecto `Sentinel2Provider`. |
+| `oceanos:ingested_at` | Fecha UTC del primer registro **de metadatos** local. |
+| `oceanos:processing_status` | `discovered`; no implica descarga ni procesamiento. |
+
+No se inventan valores científicos ausentes: plataforma y nubosidad opcionales
+se omiten del Item y se reconstruyen como `None`. La Collection vacía tiene una
+extensión espacial global y un intervalo temporal abierto, identificados con
+`oceanos:extent_status = empty`; al añadir escenas se recalcula su extensión
+real y el estado pasa a `from_scenes`. `license: other` no concede una licencia
+nueva sobre los assets remotos.
+
+```python
+from oceanos.catalog import (
+    LocalSceneCatalog, SceneSearchResult, scene_from_stac_item,
+)
+from pathlib import Path
+
+catalog = LocalSceneCatalog("catalog")
+scenes = SceneSearchResult.model_validate_json(Path("scenes.json").read_text())
+for scene in scenes.scenes:
+    inserted = catalog.add_scene(scene)  # True al añadir; False si ya era idéntica
+    assert catalog.scene_exists(scene.scene_id)
+    assert catalog.get_scene(scene.scene_id) == scene
+    item = catalog.get_stac_item(scene.scene_id)
+    assert scene_from_stac_item(item) == scene
+
+matches = catalog.search_local_catalog(cloud_cover_max=20)
+```
+
+`get_scene` devuelve `SceneMetadata` o `None` si no existe el ID.
+`search_local_catalog` devuelve resultados ordenados por ID; admite filtros por
+AOI, colección, plataforma, fechas `datetime` con zona horaria (límites
+inclusivos) y máximo de nubes. La nubosidad desconocida no satisface un máximo.
+Todas estas operaciones trabajan con documentos locales, sin red.
+
+Añadir una escena idéntica dos veces no crea archivos ni enlaces duplicados,
+ni cambia `ingested_at`. Un ID existente con metadatos distintos produce
+`LocalCatalogError`, conservando la escena original. Cada adición se persiste
+antes de devolver el resultado. Las escrituras reemplazan cada JSON de forma
+atómica y están previstas para **un escritor a la vez**; la importación de una
+lista registra las escenas sucesivamente, no como una transacción de lote.
+
+`uv run pytest -q` incluye creación, catálogo vacío, duplicados, conflictos,
+recuperación, búsquedas, persistencia, recarga, traslado del catálogo,
+reconstrucción desde Items y validación con esquemas STAC locales. No se han
+añadido descargas de raster ni procesamiento.
+
+La persistencia utiliza el formato de catálogo con enlaces relativos de
+[PySTAC](https://pystac.readthedocs.io/en/stable/api/catalog.html).
