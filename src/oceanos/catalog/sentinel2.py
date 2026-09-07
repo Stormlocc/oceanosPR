@@ -189,6 +189,7 @@ class Sentinel2Provider(SceneProvider):
                 "media_type": asset.get("type"),
                 "title": asset.get("title"),
                 "roles": asset.get("roles") or [],
+                "file_size": asset.get("file:size"),
             }
         scene = SceneMetadata(
             scene_id=item["id"], collection=item["collection"],

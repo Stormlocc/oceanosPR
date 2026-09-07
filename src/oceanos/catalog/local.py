@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import datetime, timezone
 from hashlib import sha256
 import os
@@ -12,6 +13,7 @@ from urllib.parse import urlsplit
 
 import pystac
 from pystac.extensions.eo import EOExtension
+from pystac.extensions.file import FileExtension
 from pystac.layout import HrefLayoutStrategy
 from shapely.geometry import shape
 
@@ -99,6 +101,8 @@ def scene_to_stac_item(
             href=asset.href, media_type=asset.media_type, title=asset.title,
             roles=list(asset.roles),
         ))
+        if asset.file_size is not None:
+            FileExtension.ext(item.assets[key], add_if_missing=True).size = asset.file_size
     return item
 
 
@@ -119,6 +123,7 @@ def scene_from_stac_item(item: pystac.Item) -> SceneMetadata:
             assets={key: SceneAsset(
                 href=asset.href, media_type=asset.media_type, title=asset.title,
                 roles=asset.roles or [],
+                file_size=asset.extra_fields.get("file:size"),
             ) for key, asset in item.assets.items()},
         )
     except (KeyError, TypeError, ValueError) as exc:
@@ -206,6 +211,40 @@ class LocalSceneCatalog:
 
     def scene_exists(self, scene_id: str) -> bool:
         return self.get_stac_item(scene_id) is not None
+
+    def record_materialization(
+        self, scene_id: str, *, status: str, manifest_path: str, assets: dict[str, dict],
+    ) -> None:
+        """Record verified local copies without replacing original asset HREFs.
+
+        ``assets`` is keyed by original asset key. Missing entries have any stale
+        local annotations removed. Scientific metadata is never updated here.
+        """
+        if status not in {"pending", "partial", "complete", "failed"}:
+            raise ValueError(f"Invalid materialization status: {status}")
+        catalog = self._load()
+        item = next(catalog.get_items(scene_id, recursive=True), None)
+        if item is None:
+            raise LocalCatalogError(f"Scene does not exist: {scene_id}")
+        before = deepcopy(item.to_dict())
+        for key, record in assets.items():
+            if key not in item.assets or item.assets[key].href != record["source_url"]:
+                raise LocalCatalogError(f"Materialized asset does not match original URL: {key}")
+        item.properties["oceanos:materialization_status"] = status
+        item.properties["oceanos:manifest_path"] = manifest_path
+        item.properties["oceanos:processing_status"] = {
+            "complete": "materialized", "partial": "partially_materialized",
+            "failed": "materialization_failed", "pending": "discovered",
+        }[status]
+        local_fields = ("local_path", "file_size", "sha256", "download_timestamp")
+        for key, asset in item.assets.items():
+            for field in local_fields:
+                asset.extra_fields.pop(f"oceanos:{field}", None)
+            if key in assets:
+                for field in local_fields:
+                    asset.extra_fields[f"oceanos:{field}"] = assets[key][field]
+        if item.to_dict() != before:
+            self._save(catalog)
 
     def get_stac_item(self, scene_id: str) -> pystac.Item | None:
         """Return a detached item; mutating it does not update the catalog."""

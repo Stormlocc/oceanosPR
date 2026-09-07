@@ -34,6 +34,7 @@ class SceneAsset(MetadataModel):
     media_type: str | None = None
     title: str | None = None
     roles: list[str] = Field(default_factory=list)
+    file_size: int | None = Field(default=None, ge=0)
 
 
 class SceneMetadata(MetadataModel):

@@ -12,6 +12,7 @@ from oceanos.catalog import (
     SceneProviderError, SceneSearchResult, Sentinel2Provider,
 )
 from oceanos.config import ConfigurationError, load_config
+from oceanos.ingestion import MVP_BANDS, MaterializationError, fetch_scene
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -29,7 +30,7 @@ def build_parser() -> argparse.ArgumentParser:
     aoi_commands = aoi.add_subparsers(dest="aoi_command", required=True)
     info = aoi_commands.add_parser("info", help="Load, validate, and describe the AOI")
     info.add_argument("--config", type=Path, default=Path("configs/mvp.yaml"))
-    scenes = commands.add_parser("scenes", help="Discover scenes without downloading imagery")
+    scenes = commands.add_parser("scenes", help="Discover scenes or materialize selected bands")
     scene_commands = scenes.add_subparsers(dest="scenes_command", required=True)
     search = scene_commands.add_parser("search", help="Search Sentinel-2 STAC metadata")
     search.add_argument("--start", required=True, help="YYYY-MM-DD or ISO datetime with timezone")
@@ -38,6 +39,13 @@ def build_parser() -> argparse.ArgumentParser:
     search.add_argument("--collection", help="Override the configured STAC collection")
     search.add_argument("--cloud-cover-max", type=float, help="Maximum scene cloud percentage (0–100)")
     search.add_argument("--output", type=Path, help="Write normalized scene metadata as JSON")
+    fetch = scene_commands.add_parser("fetch", help="Materialize MVP bands of one cataloged scene")
+    fetch.add_argument("scene_id")
+    fetch.add_argument("--bands", nargs="+", choices=MVP_BANDS, default=MVP_BANDS)
+    fetch.add_argument("--config", type=Path, default=Path("configs/mvp.yaml"))
+    fetch.add_argument("--catalog-dir", type=Path, help="Override the local catalog directory")
+    fetch.add_argument("--raw-dir", type=Path, help="Override the raw data directory")
+    fetch.add_argument("--timeout", type=float, default=60, help="HTTP timeout in seconds (default: 60)")
     catalog = commands.add_parser("catalog", help="Maintain a local STAC scene catalog")
     catalog_commands = catalog.add_subparsers(dest="catalog_command", required=True)
     add = catalog_commands.add_parser("add", help="Register normalized scenes.json without downloads")
@@ -83,7 +91,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"Bounds: {get_bounds(aoi)}")
         print(f"Geometry type: {aoi.geometry.geom_type}")
         print("Validation: valid")
-    elif args.command == "scenes":
+    elif args.command == "scenes" and args.scenes_command == "search":
         try:
             settings = load_config(args.config)
             aoi = load_aoi(settings.aoi.path, name=settings.aoi.name, target_crs=settings.aoi.target_crs)
@@ -104,6 +112,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         _print_scenes(scenes)
         if args.output is not None:
             print(f"Normalized metadata saved to {args.output}")
+    elif args.command == "scenes" and args.scenes_command == "fetch":
+        try:
+            settings = load_config(args.config)
+            catalog = LocalSceneCatalog(
+                args.catalog_dir if args.catalog_dir is not None else settings.catalog_dir,
+                collection_id=settings.scenes.collection,
+            )
+            raw_dir = args.raw_dir if args.raw_dir is not None else settings.raw_dir
+            manifest = fetch_scene(catalog, args.scene_id, raw_dir, bands=args.bands, timeout=args.timeout)
+        except (ConfigurationError, LocalCatalogError, MaterializationError, ValueError, OSError) as exc:
+            parser.exit(1, f"Error: {exc}\n")
+        print(f"Scene: {manifest.scene_id}; MVP materialization: {manifest.status}")
+        for band in dict.fromkeys(args.bands):
+            record = manifest.assets[band]
+            print(f"{band} ({record.asset_key}): {record.file_size} bytes; {record.local_path}")
+        print(f"Manifest: {Path(raw_dir).expanduser().resolve() / 'sentinel2' / args.scene_id / 'manifest.json'}")
     elif args.command == "catalog":
         try:
             # Validate the whole input before creating or modifying a catalog.

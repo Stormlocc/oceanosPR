@@ -60,6 +60,7 @@ def test_zero_results_and_request_contract(aoi):
 
 
 def test_one_scene_normalized_and_serialized(aoi, item, tmp_path):
+    item["assets"]["red"]["file:size"] = 1234
     calls = []
     def handler(request):
         calls.append(request)
@@ -79,6 +80,7 @@ def test_one_scene_normalized_and_serialized(aoi, item, tmp_path):
     assert scene.source_catalog == CATALOG
     assert scene.assets["red"].href == item["assets"]["red"]["href"]
     assert scene.assets["red"].media_type == item["assets"]["red"]["type"]
+    assert scene.assets["red"].file_size == 1234
     path = tmp_path / "scenes.json"
     result = SceneSearchResult(scenes=scenes)
     result.save(path)

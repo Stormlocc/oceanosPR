@@ -226,3 +226,109 @@ añadido descargas de raster ni procesamiento.
 
 La persistencia utiliza el formato de catálogo con enlaces relativos de
 [PySTAC](https://pystac.readthedocs.io/en/stable/api/catalog.html).
+
+## Fase 4: materialización controlada de una escena
+
+La escena debe estar registrada previamente en el catálogo local:
+
+```bash
+python -m oceanos scenes fetch SCENE_ID
+python -m oceanos scenes fetch SCENE_ID --bands B02 B03 B04 B08 B11
+# También puedes materializar solo una parte del MVP:
+python -m oceanos scenes fetch SCENE_ID --bands B02 B03
+```
+
+El comando admite `--config`, `--catalog-dir`, `--raw-dir` y `--timeout` (60
+segundos por operación HTTP por defecto). Usa `raw_dir` de la configuración,
+creando `data/raw/sentinel2/{scene_id}/` en el MVP. Solo se permiten las cinco
+bandas indicadas; no se solicitan otras bandas, previews ni archivos de QA.
+
+| Banda | Clave alternativa del asset |
+| --- | --- |
+| B02 | `blue` |
+| B03 | `green` |
+| B04 | `red` |
+| B08 | `nir` |
+| B11 | `swir16` |
+
+Se priorizan las claves B02/B03/B04/B08/B11 sobre sus alternativas. `nir08`
+(B8A) no sustituye a B08. Antes de iniciar transferencias se comprueba que la
+escena y **todos** los assets solicitados existen. Esta implementación admite
+URLs HTTP(S); otros protocolos producen un error explícito antes de descargar.
+Los IDs deben ser componentes de ruta seguros, como los IDs habituales de
+Sentinel-2.
+
+Cada archivo completo se registra en `manifest.json`:
+
+```json
+{
+  "schema_version": "1.0",
+  "scene_id": "S2A_EXAMPLE",
+  "status": "partial",
+  "assets": {
+    "B02": {
+      "asset_key": "blue",
+      "source_url": "https://assets.example/blue.tif",
+      "download_timestamp": "2024-01-01T12:00:00Z",
+      "local_path": "B02.tif",
+      "file_size": 123456,
+      "sha256": "<64 caracteres hexadecimales calculados del archivo>"
+    }
+  },
+  "failures": {}
+}
+```
+
+Este fragmento es ilustrativo. Las rutas del manifiesto son relativas al
+directorio de la escena; las fechas y SHA-256 reales se calculan al completar
+cada transferencia. Los nombres locales conservan la extensión `.tif`, `.tiff`
+o `.jp2` cuando figura en la URL; en otros casos usan `.bin`, sin convertir el
+formato del archivo.
+
+Antes de reutilizar un archivo se comprueba que existe, coincide con su asset
+y URL originales, conserva el tamaño y tiene el mismo SHA-256 del manifiesto.
+Si el catálogo aporta `file:size`, también debe coincidir. Ese tamaño ahora se
+conserva en el modelo normalizado `SceneAsset.file_size` y al guardar/recargar
+STAC. Un archivo sin un registro completo, aunque tenga el tamaño esperado,
+se vuelve a descargar. No se confía en archivos `.part` sobrantes.
+
+Las transferencias usan streaming y un temporal `.part` en el mismo directorio
+del destino. Se exige una respuesta HTTP 200 completa y se compara el tamaño
+con `file:size` y/o `Content-Length`, cuando estén disponibles. Se rechazan
+respuestas parciales HTTP 206, archivos vacíos y tamaños inconsistentes. Cuando
+no hay tamaño remoto, se exige que el stream termine sin error y se registra
+el tamaño recibido. Tras cerrar y sincronizar el temporal, `os.replace` publica
+el archivo atómicamente. Se guardan el manifiesto y el resultado en el catálogo
+después de completar cada banda.
+
+Una transferencia fallida elimina su temporal, registra el error en `failures`
+y termina con código 1. Las bandas ya completadas quedan disponibles para
+reutilizarse al repetir el comando; la banda interrumpida comienza desde cero.
+Un archivo publicado antes de un fallo al guardar el manifiesto no se reutiliza
+sin una verificación registrada. Si solo falló la actualización del catálogo,
+la siguiente ejecución puede repararla usando el manifiesto ya guardado, sin
+repetir la transferencia. Como en Fase 3, se admite un escritor a la vez.
+
+El catálogo conserva los `href` originales y añade `oceanos:local_path`,
+`oceanos:file_size`, `oceanos:sha256` y `oceanos:download_timestamp` a los assets
+materializados. El Item registra `oceanos:manifest_path` y
+`oceanos:materialization_status`: `complete` significa que las **cinco bandas
+MVP** están verificadas; `partial` indica que solo algunas lo están; `failed`
+indica un fallo sin bandas verificadas; `pending` indica que aún no hay archivos
+ni fallos registrados. Su `oceanos:processing_status` pasa respectivamente a
+`materialized`, `partially_materialized`, `materialization_failed` o `discovered`.
+La geometría, fecha, nubosidad y metadatos científicos originales permanecen
+intactos, y sigue siendo posible reconstruir `SceneMetadata` desde el Item.
+
+La repetición de una materialización ya verificada no realiza peticiones de
+assets ni modifica archivos, timestamps o metadatos. Todos los archivos del
+manifiesto se verifican de nuevo, incluso si la nueva petición selecciona menos
+bandas, para detectar archivos borrados o alterados. Las rutas locales anotadas
+en STAC son absolutas; tras mover los datos, vuelve a ejecutar `fetch` con la
+nueva raíz para verificarlos y actualizar esas rutas.
+
+`uv run pytest -q` cubre descargas simuladas, archivos existentes, interrupciones,
+ausencia de assets, verificación de tamaños y checksums, idempotencia,
+manifiestos y actualización del catálogo. Los tests bloquean conexiones reales
+y no descargan bandas de Sentinel-2. Esta fase no calcula índices ni transforma
+rasters.
