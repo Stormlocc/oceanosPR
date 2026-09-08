@@ -76,3 +76,20 @@ def test_invalid_scene_configuration(monkeypatch, field, value):
     monkeypatch.setenv(f"OCEANOS_SCENES__{field}", value)
     with pytest.raises(ConfigurationError):
         load_config(PROJECT_ROOT / "configs/mvp.yaml")
+
+
+def test_normalization_environment_override(monkeypatch):
+    monkeypatch.setenv("OCEANOS_NORMALIZATION__TARGET_RESOLUTION", "20")
+    settings = load_config(PROJECT_ROOT / "configs/mvp.yaml")
+    assert settings.normalization.target_resolution == 20
+    assert settings.normalization.continuous_resampling == "bilinear"
+
+
+@pytest.mark.parametrize("field,value", [
+    ("TARGET_RESOLUTION", "0"), ("TARGET_RESOLUTION", "nan"), ("BUFFER_M", "-1"),
+    ("CONTINUOUS_RESAMPLING", "cubic"), ("REFERENCE_BAND", "B11"), ("WARP_MEMORY_LIMIT_MB", "0"),
+])
+def test_invalid_normalization_configuration(monkeypatch, field, value):
+    monkeypatch.setenv(f"OCEANOS_NORMALIZATION__{field}", value)
+    with pytest.raises(ConfigurationError):
+        load_config(PROJECT_ROOT / "configs/mvp.yaml")

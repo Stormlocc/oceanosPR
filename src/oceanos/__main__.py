@@ -54,6 +54,15 @@ def build_parser() -> argparse.ArgumentParser:
     for command in (add, listing):
         command.add_argument("--config", type=Path, default=Path("configs/mvp.yaml"))
         command.add_argument("--catalog-dir", type=Path, help="Override the local catalog directory")
+    process = commands.add_parser("process", help="Spatial raster operations")
+    processing = process.add_subparsers(dest="process_command", required=True)
+    normalize = processing.add_parser("normalize", help="Align local MVP bands to a common metric grid")
+    normalize.add_argument("scene_id")
+    normalize.add_argument("--config", type=Path, default=Path("configs/mvp.yaml"))
+    normalize.add_argument("--resolution", type=float, help="Target pixel size in metres")
+    normalize.add_argument("--buffer", type=float, help="AOI buffer in metres")
+    normalize.add_argument("--resampling", choices=["nearest", "bilinear"], help="Continuous band resampling")
+    normalize.add_argument("--target-crs", help="Override the AOI target CRS; must use metres")
     return parser
 
 
@@ -128,6 +137,38 @@ def main(argv: Sequence[str] | None = None) -> int:
             record = manifest.assets[band]
             print(f"{band} ({record.asset_key}): {record.file_size} bytes; {record.local_path}")
         print(f"Manifest: {Path(raw_dir).expanduser().resolve() / 'sentinel2' / args.scene_id / 'manifest.json'}")
+    elif args.command == "process":
+        from rasterio.errors import RasterioError
+        from oceanos.processing import NormalizationError, normalize_scene
+
+        try:
+            settings = load_config(args.config)
+            options = settings.normalization
+            catalog = LocalSceneCatalog(settings.catalog_dir, collection_id=settings.scenes.collection)
+            aoi = load_aoi(settings.aoi.path, name=settings.aoi.name, target_crs=settings.aoi.target_crs)
+            report = normalize_scene(
+                catalog, args.scene_id, aoi, raw_dir=settings.raw_dir,
+                intermediate_dir=settings.intermediate_dir,
+                target_crs=args.target_crs or settings.aoi.target_crs,
+                resolution=args.resolution if args.resolution is not None else options.target_resolution,
+                buffer_m=args.buffer if args.buffer is not None else options.buffer_m,
+                reference_band=options.reference_band,
+                continuous_resampling=args.resampling or options.continuous_resampling,
+                warp_memory_limit_mb=options.warp_memory_limit_mb,
+            )
+        except (ConfigurationError, LocalCatalogError, MaterializationError, NormalizationError, RasterioError, ValueError, OSError) as exc:
+            parser.exit(1, f"Error: {exc}\n")
+        grid = report["grid"]
+        print(f"Scene: {args.scene_id}; reference: {report['reference_band']}")
+        print(f"Grid: {grid['width']} x {grid['height']} pixels; {grid['crs']}; {grid['resolution']} m")
+        print(f"Bounds: {grid['bounds']}")
+        print(f"Transform: {grid['transform']}")
+        print(f"Raster size on disk: {report['output_size_bytes'] / 1024**2:.2f} MiB")
+        print(f"Uncompressed raster size: {report['uncompressed_size_bytes'] / 1024**2:.2f} MiB")
+        peak = report["peak_process_memory_bytes"]
+        print(f"Peak process RSS: {peak / 1024**2:.2f} MiB" if peak is not None else "Peak process RSS: unavailable")
+        print(f"Warp memory limit: {report['warp_memory_limit_mb']} MiB; GDAL cache: {report['gdal_cache_limit_mb']} MiB")
+        print(f"Normalized rasters: {report['output_directory']}")
     elif args.command == "catalog":
         try:
             # Validate the whole input before creating or modifying a catalog.

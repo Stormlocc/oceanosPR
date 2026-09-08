@@ -332,3 +332,104 @@ ausencia de assets, verificación de tamaños y checksums, idempotencia,
 manifiestos y actualización del catálogo. Los tests bloquean conexiones reales
 y no descargan bandas de Sentinel-2. Esta fase no calcula índices ni transforma
 rasters.
+
+## Fase 5: normalización espacial
+
+```bash
+python -m oceanos process normalize SCENE_ID
+python -m oceanos process normalize SCENE_ID --resolution 10 --buffer 100
+```
+
+Se requieren las cinco bandas materializadas en Fase 4. Se verifica su tamaño,
+URL de origen y SHA-256 contra el manifiesto antes de abrir los rasters; una
+banda ausente o incompleta produce un error, sin iniciar una descarga.
+
+La configuración `normalization` define la grilla y el remuestreo:
+
+```yaml
+normalization:
+  target_resolution: 10
+  buffer_m: 0
+  reference_band: "B02"
+  continuous_resampling: "bilinear"
+  warp_memory_limit_mb: 64
+```
+
+La resolución y el buffer se expresan en **metros**. El CRS de destino es
+`aoi.target_crs`, que debe ser proyectado y usar metros. La CLI admite
+`--target-crs`, `--resolution`, `--buffer`, `--resampling nearest|bilinear` y
+`--config`. También se admiten variables como
+`OCEANOS_NORMALIZATION__TARGET_RESOLUTION`.
+
+`GridSpec` contiene `crs`, `resolution`, `bounds`, `width`, `height` y
+`transform`. Se crea una sola vez por escena usando B02 como referencia inicial
+(alternativas configurables de 10 m: B03, B04 o B08). Si el CRS coincide, se
+conserva el origen de píxel de la referencia; al reproyectar se calcula un
+origen común con Rasterio/GDAL. Los límites del AOI con buffer se ajustan hacia
+afuera a esa grilla, que puede extenderse menos de un píxel más allá del recorte
+solicitado. El recorte usa la forma completa del AOI, incluidos huecos y
+MultiPolygon; los centros de píxel fuera del AOI con buffer se escriben como
+nodata. Las zonas sin cobertura de la banda también son nodata.
+
+Las cinco bandas de reflectancia continua usan `bilinear` por defecto;
+`continuous_resampling: nearest` permite sustituirlo. La API
+`normalize_band(..., categorical=True)` utiliza obligatoriamente `nearest` para
+máscaras o categorías y rechaza una petición explícita de `bilinear`. Esta fase
+no descarga ni incorpora nuevas bandas de QA.
+
+```python
+from oceanos.processing import build_grid, normalize_band
+
+# aoi es un objeto AOI cargado mediante oceanos.aoi.load_aoi.
+grid = build_grid("B02.tif", aoi, target_crs="EPSG:32619", resolution=10, buffer_m=100)
+normalize_band("B11.tif", "B11_normalized.tif", grid)
+# Para una máscara local, si se dispone de ella:
+normalize_band("SCL.tif", "SCL_normalized.tif", grid, categorical=True)
+```
+
+La salida de la CLI queda en:
+
+```text
+data/intermediate/{scene_id}/normalized/
+  B02.tif
+  B03.tif
+  B04.tif
+  B08.tif
+  B11.tif
+  manifest.json
+```
+
+Cada GeoTIFF tiene **exactamente el mismo CRS, transform, width, height y
+bounds**. Se comprueba la igualdad al releer los archivos, antes de publicar el
+conjunto. Las bandas se generan en un directorio temporal; una normalización
+fallida conserva el conjunto anterior. La sustitución usa un directorio de
+respaldo durante el cambio y está prevista para un escritor a la vez.
+
+Los outputs son GeoTIFF Float32 con compresión DEFLATE y nodata NaN. Se respetan
+el nodata y las máscaras del raster de origen, preservando ceros válidos cuando
+no representan nodata. Se conservan escala, offset y unidades del origen, sin
+aplicarlos a los valores numéricos. Los inputs admitidos en este MVP son
+enteros de hasta 16 bits o Float32. Las categorías enteras admitidas se conservan
+exactamente con nearest aunque su contenedor de salida sea Float32.
+
+Tanto los tags del raster como `manifest.json` registran `native_resolution`,
+`processing_resolution` y `resampling_method`, junto con el CRS y las unidades
+de la resolución nativa. Por ejemplo, B11 conserva su resolución nativa de 20 m
+aunque la grilla de procesamiento sea de 10 m. El manifiesto registra además la
+grilla completa, la banda de referencia, el buffer, las rutas y tamaños.
+
+La reproyección utiliza Rasterio `WarpedVRT` y lee/escribe bloques de 256 × 256
+píxeles, procesando una banda a la vez. `warp_memory_limit_mb` limita la memoria
+de warp y se aplica también, separadamente, a la caché GDAL. Estos límites no
+son un límite estricto sobre la memoria total del proceso. Al terminar, la CLI
+reporta dimensiones, bounds, transform, tamaño real de los rasters en disco,
+tamaño sin compresión y pico RSS del proceso (cuando la plataforma lo permite).
+Ese pico incluye el intérprete y las bibliotecas; no se presenta como memoria
+exclusiva de los arrays ni como una lectura instantánea.
+
+`uv run pytest -q` valida mismo CRS, reproyección, cambios de resolución,
+dimensiones, transform, bounds, nodata, máscaras, remuestreo categórico y
+alineación exacta de todas las bandas. Se usan rasters sintéticos pequeños y no
+se consulta Internet. No se calculan FAI, NDVI ni otros índices científicos.
+
+Referencia: [reproyección con Rasterio](https://rasterio.readthedocs.io/en/stable/topics/reproject.html).

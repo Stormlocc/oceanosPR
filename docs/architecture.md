@@ -1,4 +1,4 @@
-# Arquitectura hasta Fase 4
+# Arquitectura hasta Fase 5
 
 La configuración tipada (`oceanos.config`) resuelve las rutas del proyecto y
 separa la definición del AOI de las opciones de descubrimiento. Cargar el YAML
@@ -37,8 +37,17 @@ con namespace `oceanos`, manteniendo intactos los assets remotos y la metadata
 científica. `SceneAsset.file_size` conserva el tamaño remoto si estaba disponible.
 La materialización utiliza el mismo modelo de un escritor a la vez del catálogo.
 
-Procesamiento raster, compuestos, publicación y API siguen sin implementar
-lógica de esas etapas; no se calculan índices.
+`oceanos.processing.GridSpec` define una grilla métrica común, referenciada a
+B02 por defecto y ajustada al AOI con buffer. `normalize_scene` verifica el
+manifiesto de materialización y aplica esa única grilla a las cinco bandas.
+`normalize_band` usa Rasterio/GDAL en bloques, conserva nodata/máscaras y
+escala/offset, y distingue reflectancia continua (bilinear por defecto) de
+categorías (nearest obligatorio). Los rasters y su manifiesto se publican
+conjuntamente después de comprobar la igualdad exacta de CRS, transform,
+dimensiones y bounds. La CLI reporta tamaño, dimensiones y memoria del proceso.
+
+Compuestos, publicación y API siguen sin implementar lógica de esas etapas;
+no se calculan FAI, NDVI ni otros índices científicos.
 
 Los tests de catálogo simulan HTTP mediante `httpx.MockTransport` y usan fixtures
 sintéticos. `tests/integration` solo se recopila con `--run-integration` y valida
@@ -47,3 +56,5 @@ catálogo local bloquean conexiones de red y validan los JSON contra los esquema
 STAC incluidos en PySTAC, además de comprobar la reconstrucción del modelo.
 Las transferencias se prueban con streams sintéticos, incluyendo fallos y tamaños
 inconsistentes; la suite habitual no descarga archivos reales.
+La normalización usa rasters sintéticos con distintas resoluciones y CRS, nodata
+y máscaras; comprueba también la conservación de los outputs previos ante fallos.

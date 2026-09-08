@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import ClassVar
+from typing import ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pyproj import CRS
@@ -76,6 +76,18 @@ class SceneSearchSettings(BaseModel):
         return value.strip()
 
 
+class NormalizationSettings(BaseModel):
+    """Spatial-only normalization in the AOI's projected, metric target CRS."""
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+
+    target_resolution: float = Field(default=10, gt=0)
+    buffer_m: float = Field(default=0, ge=0)
+    reference_band: Literal["B02", "B03", "B04", "B08"] = "B02"
+    continuous_resampling: Literal["nearest", "bilinear"] = "bilinear"
+    warp_memory_limit_mb: int = Field(default=64, gt=0)
+
+
 class OceanosSettings(BaseSettings):
     """Validated settings shared by OCEANOS components.
 
@@ -99,6 +111,7 @@ class OceanosSettings(BaseSettings):
     default_crs: str
     aoi: AOISettings
     scenes: SceneSearchSettings = Field(default_factory=SceneSearchSettings)
+    normalization: NormalizationSettings = Field(default_factory=NormalizationSettings)
 
     @field_validator("project_name", "default_crs")
     @classmethod

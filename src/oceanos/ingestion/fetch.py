@@ -103,6 +103,33 @@ def _save_manifest(manifest: SceneManifest, path: Path) -> None:
             temporary.unlink()
 
 
+def load_materialized_bands(
+    scene: SceneMetadata, raw_dir: str | Path, bands: Sequence[str] = MVP_BANDS,
+) -> dict[str, Path]:
+    """Read-only verification for downstream processing; never fetch missing data."""
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,199}", scene.scene_id):
+        raise MaterializationError("scene_id must be a safe filename component")
+    directory = Path(raw_dir).expanduser().resolve() / "sentinel2" / scene.scene_id
+    if directory.resolve() != directory:
+        raise MaterializationError("Scene directory must not contain symbolic links")
+    try:
+        manifest = SceneManifest.model_validate_json((directory / "manifest.json").read_text(encoding="utf-8"))
+        if manifest.scene_id != scene.scene_id:
+            raise ValueError("Manifest belongs to a different scene")
+        paths = {}
+        for band in bands:
+            if band not in MVP_BANDS or band not in manifest.assets:
+                raise ValueError(f"Band {band} is not materialized")
+            key, asset = _resolve_asset(scene, band)
+            path = directory / _filename(band, asset)
+            if not _verified(manifest.assets[band], key, asset, path):
+                raise ValueError(f"Band {band} failed local integrity verification")
+            paths[band] = path
+        return paths
+    except (OSError, ValueError) as exc:
+        raise MaterializationError(f"Cannot use materialized scene {scene.scene_id}: {exc}") from exc
+
+
 def _sync(manifest: SceneManifest, path: Path, catalog: LocalSceneCatalog) -> None:
     manifest.status = (
         "complete" if set(MVP_BANDS) <= manifest.assets.keys()
