@@ -56,7 +56,7 @@ its scene, processing version and parameters.
 | Q3 | Fase 5 grid/normalization **survives**, reduced to a post-ACOLITE delivery-grid step; `assert_aligned` retained |
 | Q4 | Products: `rhow_*`, `Rrs_*`, `rhorc_*`, `tur_nechad2016`, `spm_nechad2016`, `chl_re_gons740`, `fai`, `fait`, `ndvi` |
 | Q5 | Two usability gates: scene-level cloud at discovery + `l2_flags == 0` per pixel; publish only above an AOI valid-fraction threshold |
-| Q6 | Work lives on a branch cut at `acc6072`; `master` untouched as the record of the rejected Fase 6/7 |
+| Q6 | Work lives on branch `master`, cut fresh at `acc6072` and renamed over the old one. **Revised 2026-09-12:** the rejected Fase 6/7 commits were deliberately left unreachable rather than preserved — the user chose to let them be garbage-collected. |
 | Q7 | Land/sea split by **geometric GSHHG mask** (`ac.masking.land_water_mask`), decoupled from the SWIR threshold, which rises to `0.05` for cloud/bright-target duty only |
 | Q8 | Coastal buffer is **layered**: exclude ~100–200 m from analysis (adjacency), retain the coastline in visualisation |
 | Q9 | `dsf_aot_estimate=fixed` — the AOI is too small to give the tiled DSF enough valid tiles |

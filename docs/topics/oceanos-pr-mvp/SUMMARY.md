@@ -1,114 +1,158 @@
-# OCEANOS PR — Where the project stands
+# OCEANOS PR — Estado del proyecto
 
-**Date:** 2026-09-11 · **Baseline:** commit `acc6072` ("Fase5 complete") · **Status:** discovery and research complete; architecture not yet designed.
+**Fecha:** 2026-09-12 · **Rama:** `master` @ `9fa73b3` · **Fase:** descubrimiento, producto, investigación y contrato **completos**; arquitectura **no iniciada**.
 
-One-page entry point to the four documents produced in this phase. Each section links to where the detail lives.
+Punto de entrada a todo lo producido. Cada sección enlaza al documento donde vive el detalle.
 
 ---
 
-## 1. What happened in this phase
+## 1. Qué se hizo, en orden
 
-Three things, in order: we assessed what exists, we defined what to build, and we established the external facts that constrain how.
+| # | Etapa | Producto | Estado |
+|---|---|---|---|
+| 1 | Evaluación del código existente | [`CURRENT_STATE.md`](CURRENT_STATE.md) | Completa — se leyó cada archivo de `src/` y `tests/` |
+| 2 | Definición de producto | [`PRD.md`](PRD.md) | `draft` — 7 decisiones de producto |
+| 3 | Investigación ACOLITE | [`research/ACOLITE_TECHNICAL_BASELINE.md`](research/ACOLITE_TECHNICAL_BASELINE.md) | Verificada por un agente independiente |
+| 4 | Entrevista de ingeniería | [`PLAN.md`](PLAN.md) § Brief | **LOCKED** — 18 decisiones, 0 diferidas |
+| 5 | Investigación de publicación | `.work/oceanos-pr-mvp/publication-architecture/` | Compuertas limpias, 6 sidecars |
+| 6 | Plan de implementación | `PLAN.md` § Plan | **Pendiente** — siguiente paso |
 
-| Document | What it answers | Size |
+La evidencia cruda de ambas investigaciones (2 índices, 17 sidecars, 2 ledgers de cobertura) vive en `.work/`, sin versionar.
+
+---
+
+## 2. El sistema hoy
+
+El pipeline corre **descubrimiento → catálogo STAC local → descarga verificada → normalización espacial**, y se detiene. Cinco bandas reproyectadas a una grilla métrica común como Float32 con nodata NaN, conteniendo **valores de muestra crudos, no reflectancia**.
+
+~1 400 líneas de código, 137 tests que pasan, y una disciplina de ingeniería consistente: publicación atómica con rollback, descargas verificadas con SHA-256, artefactos versionados, y una negativa sistemática a inventar valores ausentes.
+
+No hay corrección atmosférica, ni enmascarado de calidad, ni producto espectral, ni API, ni forma de mirar nada.
+
+**Defectos menores pendientes:** el script de consola `oceanospr` está roto, hay un `nasa_oceanos_pr.egg-info/` obsoleto sin ignorar, y `pandas` está declarado pero no se importa en ninguna parte.
+
+---
+
+## 3. Las 18 decisiones cerradas
+
+| # | Decisión |
+|---|---|
+| Q1 | ACOLITE se invoca como **subproceso** con archivo de settings, un proceso por escena |
+| Q2 | **OCEANOS adquiere** el SAFE; descubrimiento reorientado a CDSE OData para L1C completo |
+| Q3 | La grilla de la Fase 5 **sobrevive**, reducida a paso de grilla de entrega *posterior* a ACOLITE |
+| Q4 | Productos: `rhow_*`, `Rrs_*`, `rhorc_*`, `tur_nechad2016`, `spm_nechad2016`, `chl_re_gons740`, `fai`, `fait`, `ndvi` |
+| Q5 | Dos compuertas de usabilidad: nubosidad de escena en descubrimiento + `l2_flags == 0` por píxel |
+| Q6 | Trabajo en `master`, creada sobre `acc6072`; Fase 6/7 abandonadas e inalcanzables |
+| Q7 | Tierra/mar por **máscara geométrica GSHHG**, desacoplada del umbral SWIR (que sube a `0.05`) |
+| Q8 | Buffer costero **en capas**: excluir ~100–200 m del análisis, conservar la costa en visualización |
+| Q9 | `dsf_aot_estimate=fixed` — el AOI es demasiado pequeño para el DSF por teselas |
+| Q10 | Descartar el SAFE tras procesar; `l1r_delete_netcdf=True`; conservar L2R + L2W + manifiestos |
+| Q11 | `merge_tiles=True` con `limit`; sin mosaicado externo |
+| Q12 | Revisar el límite del AOI antes del backfill; ajustarlo a 19QFV **si es científicamente defendible** |
+| Q13 | Corrección de glint **desactivada**; registrar el ángulo como metadato |
+| Q14 | Pedir `rhorc_*` para mantener calculable el FAI nativo de la literatura |
+| Q15 | Añadir `version=20260421.0` al `config.txt` de despliegue + registrar el SHA del commit |
+| Q16 | **NetCDF archivo + COG publicación**; `l2_flags` en **COG separado** con overviews `MODE`/`NEAREST` |
+| Q17 | **STAC 1.1.0 estático**; `classification:bitfields` + `processing:`; **sin servidor de teselas** |
+| Q18 | Settings resueltos vía enlace `processing-software` + asset de metadatos *(rodeo aceptado)* |
+
+---
+
+## 4. Hechos establecidos sobre ACOLITE
+
+Dieciocho cerrados, todos con fuente primaria y verificación independiente. Los que cambian el diseño:
+
+**La adquisición actual es incompatible por tres motivos simultáneos.** Nivel equivocado (L2A se rechaza en duro), empaquetado equivocado (bandas COG sueltas, no un `.SAFE`), e insumos destruidos (el reproyectado previo descarta geometría y calibración). **Se reemplaza, no se adapta.** Y ACOLITE necesita ocho bandas que el conjunto actual omite.
+
+**ACOLITE ya hace casi todo lo que construyó la Fase 5** — recorte, remuestreo, reproyección, enmascarado, y todos los algoritmos. Duplicarlo aguas arriba es, en el mejor caso, trabajo repetido.
+
+**Productos calibrados para Sentinel-2**: `tur_nechad2016`, `spm_nechad2016`, `chl_oc2`/`chl_oc3`, `chl_re_bramich`, y las variantes red-edge `740`. **`tur_dogliotti2015` usa calibración MODIS** por advertencia del propio manual — es el que un pipeline costero adoptaría por defecto, y no está calibrado para tu sensor.
+
+**Para sargazo, ACOLITE da índices, no detección.** `fai`, `afai` y `fait` son nativos pero **sin enmascarar** — se calculan sobre tierra y nube por igual. El método publicado de Wang & Hu exige clasificación, **desmezclado lineal** y agregación *encima* del índice. Nada de eso existe.
+
+**Licencia GPLv3.** Uso interno sin distribución no genera obligación de código fuente. Invocar como proceso separado es menor acoplamiento que importar.
+
+---
+
+## 5. Hechos establecidos sobre publicación
+
+**El campo de bits no puede viajar como una banda más.** GDAL pone `OVERVIEW_RESAMPLING` en CUBIC por defecto, que fabrica combinaciones de flags que nunca ocurrieron. Y hay una razón estructural más fuerte: un COG lleva **un** predictor y **un** método de remuestreo por archivo, y los correctos para Float32 (`PREDICTOR=3`, cúbico) y para un bitfield int32 (`PREDICTOR=2`, modo) **son incompatibles**.
+
+**Invariante derivado: los overviews son solo para mostrar; toda estadística lee resolución completa.** Porque el modo pierde las clases raras, que es justo para lo que existe una banda de flags.
+
+**Leer rásters por petición para una serie temporal está ~2400× mal dimensionado.** El coste es estructural: descomprimes una tesela entera para leer un píxel. Un servidor de teselas más rápido no lo arregla — las series se pre-extraen.
+
+**Tres herramientas populares, descartadas con razón:** **Zarr** (su modelo de muchos archivos pequeños no aporta nada en disco local único), **GeoZarr** (no existe como especificación publicada), y **un servidor de teselas en el MVP** (geotiff.js lee los COG directamente).
+
+**Landsat no cierra ninguna puerta.** Collection 2 ya se entrega como COG con banda QA empaquetada, ya se publica por STAC, y es el ejemplo canónico de la extensión recomendada para `l2_flags`.
+
+---
+
+## 6. Verificado ejecutando, no leyendo
+
+Esto distingue lo comprobado de lo documentado:
+
+| Hallazgo | Cómo se comprobó |
+|---|---|
+| ACOLITE **devuelve exit 0 al fallar** | Se ejecutó con tres clases de entrada inválida; los tres exit 0 |
+| Datos auxiliares llegan con **~40–60 días de retraso** | 2026-08-04 falla, 2026-07-10 y 2026-06-15 funcionan |
+| `GMAO_IT_MET` resuelve esa latencia | Devuelve valores plausibles para la fecha que fallaba |
+| Las credenciales EarthData **autentican** | Descarga real con valores coherentes para el Caribe |
+| El **AOI cruza tiles y los datos están incompletos** | Bounds de los rásters descargados reproyectados a EPSG:4326 |
+| Los overviews de flags usan **MODE** | Lectura por rangos HTTP del `SCL.tif` real de Element84 para **19QFV, tu propio tile**: 52/52 bloques |
+| Series temporales: **2606 ms vs 1.09 ms** | Medido en esta clase de máquina, 500 escenas |
+| ACOLITE **no reporta su versión** desde un clon | Reporta `Generic GitHub Clone c2026-09-11T19:09:09` |
+
+---
+
+## 7. Correcciones hechas sobre el camino
+
+Cosas que resultaron distintas de lo que se asumió al principio:
+
+- **Existían Fase 6 y 7 completas** en `master`, con QA por SCL e índices propios. Las rechazaste por no verificadas; hoy están abandonadas e inalcanzables por decisión explícita.
+- **Las variables `EARTHDATA_*`** se evaluaron como configuración muerta a eliminar. Están muertas *como estaban escritas*, pero ACOLITE sí requiere esas credenciales — la recomendación cambió de "eliminar" a "renombrar y conectar".
+- **La métrica M3 del PRD era inalcanzable.** ≤7 días desde adquisición hasta visor no se puede cumplir con datos auxiliares que tardan mes y medio. Resuelto con `ancillary_type` según edad de escena.
+- **Cuatro errores en la investigación**, detectados por el verificador independiente: conteo de commits (89→88), la constante de máscara es 47 y no 15, un rango de líneas, y una fila de checklist sobremarcada. Corregidos antes de escribir el informe.
+- **La procedencia de AFAI** descansaba solo en un string del código. Cerrada con tres fuentes ajenas a RBINS.
+
+---
+
+## 8. Entorno operativo
+
+| Componente | Ubicación | Estado |
 |---|---|---|
-| [`CURRENT_STATE.md`](CURRENT_STATE.md) | What the codebase actually is today | 482 lines |
-| [`PRD.md`](PRD.md) | What we are building, for whom, measured how | 258 lines |
-| [`research/ACOLITE_TECHNICAL_BASELINE.md`](research/ACOLITE_TECHNICAL_BASELINE.md) | What ACOLITE requires and already does | 16 sections |
-| `.work/oceanos-pr-mvp/RESEARCH.md` (+ 11 sidecars) | The raw evidence, fetch log, gaps — not committed | memory tier |
+| Clon ACOLITE (`20260421.0` es el pin candidato) | `~/acolite` | Funcional |
+| Entorno conda (gdal 3.13.3, netCDF4, zarr) | `~/micromamba/envs/acolite` | Funcional |
+| Credenciales | `~/.netrc`, permisos `600` | **Verificadas** |
+| LUTs de corrección atmosférica | `~/acolite/data/LUT` | **Vacío — falta pre-descargar** |
+| GSHHG (línea de costa) | `external_dir` | **Falta descargar** |
+
+`pyproject.toml` y `uv.lock` intactos: instalar ACOLITE como dependencia del proyecto es una decisión de arquitectura que sigue sin tomarse.
 
 ---
 
-## 2. Decisions locked
+## 9. Lo que sigue abierto
 
-| # | Decision |
-|---|---|
-| **D1** | Work from **Fase 5** (`acc6072`). It is a detached HEAD; branch `master` is two commits ahead. |
-| **D2** | **Fase 6 and Fase 7 are rejected** as unverified (SCL-based QA; in-house NDVI/FAI/RGB). Not to be revived as a shortcut. |
-| **D3** | **ACOLITE performs all processing.** |
-| **D4** | Primary users are **marine researchers**; a **separate technical operator** runs the pipeline. |
-| **D5** | Use cases: **water quality/turbidity + sargassum**. |
-| **D6** | Delivery: **internal web application, named authenticated users**. |
-| **D7** | Cadence: **historical backfill, then periodic updates** — not real-time alerting. |
+**Decisión tuya, no técnica:**
 
----
+- **Q12 quedó condicional.** ¿Necesita La Parguera científicamente la franja oriental que cae fuera de 19QFV? Ajustar el AOI a un solo tile reduce descarga, cómputo y complejidad **a un tercio** en tu máquina. Mantener tres tiles es defendible si la ciencia lo exige. **Hay que decidirlo antes del backfill.**
 
-## 3. What the system is today
+**Salvedades honestas de la investigación** — conviene conocerlas antes de tratar todo como consenso:
 
-The pipeline runs **discovery → local STAC catalogue → verified download → spatial normalization**, and stops. Five bands warped onto a common metric grid as Float32 rasters holding **raw sample values, not reflectance**.
+- La hipótesis "convertir a COG" quedó **parcialmente falsada**: NASA y Development Seed sirven NetCDF directamente vía `titiler.xarray`. Aquí COG se justifica por la lectura en navegador y el tamaño de tus productos, **no por precedente de industria**.
+- El precedente NASA de doble formato es **MEDIUM**, no HIGH — no se halló documento de operador que lo declare.
+- **deck.gl y MapLibre no se investigaron.** Si el visor va a usar MapLibre, eso queda abierto.
+- Once incógnitas menores en §14 del informe técnico, cada una con impacto calificado.
 
-There is no atmospheric correction, no quality masking, no spectral product, no composite, no API, and no way to look at anything. ~1,400 lines of source, 137 passing tests, and genuinely disciplined engineering — atomic publish with rollback, SHA-256 verified downloads, versioned artefacts, and a consistent refusal to invent missing values.
+**Pendiente operativo:**
 
-**Four cheap defects to fix early:** a broken `oceanospr` console script, a stale `nasa_oceanos_pr.egg-info/`, an unused `pandas` dependency, and `EARTHDATA_*` variables in `.env.example` that are dead as spelled — but see §5.
-
-Detail: [`CURRENT_STATE.md`](CURRENT_STATE.md).
+- Pre-descargar LUTs y GSHHG.
+- Cuatro documentos de este tema sin commitear.
 
 ---
 
-## 4. What we are building
+## 10. Siguiente paso
 
-A marine researcher must be able to answer a water-quality or sargassum question about the study area across a date range, **without operating the pipeline and without assistance** — and defend the answer afterwards.
+`/planning:plan`. Tiene todo lo que necesita: producto definido, estado actual evaluado, línea base de ACOLITE verificada, contrato de ingeniería cerrado con 18 decisiones y cero preguntas diferidas, e investigación de publicación validada.
 
-**Seven success metrics with thresholds and windows**, of which two matter most: **M4** (100% of products link to scene, processing version and parameters) and **M5** (zero products marked usable that a researcher judges unusable). M5 is what tests the quality gate; if it exceeds zero, nothing else matters.
-
-**Explicit non-goals:** real-time sargassum alerting, public access, coral/benthic habitat, in-situ validation, re-implementing ACOLITE's science.
-
-Detail: [`PRD.md`](PRD.md).
-
----
-
-## 5. What the research established
-
-Eighteen facts are now closed. The five that change the plan:
-
-**F1 — The current acquisition path is incompatible with ACOLITE on three independent counts.** Wrong level (L2A is hard-rejected), wrong packaging (loose COG bands, not a `.SAFE`), and destroyed inputs (pre-warping discards the geometry and calibration the correction consumes). **It must be replaced with complete L1C `.SAFE` acquisition**, not adapted. ACOLITE also needs eight bands the current set omits.
-
-**F2 — ACOLITE already does most of what Fase 5 built.** Clipping, resampling, reprojection, masking, flagging and every water-quality algorithm are ACOLITE's. Doing them upstream is duplicated at best and destructive at worst.
-
-**F3 — ACOLITE exits 0 on failure.** Unsupported level, missing footprints, ROI outside the scene, missing settings file — all print, skip, and return success. Confirmed by running it. **Failure detection is a first-class component, not error handling.**
-
-**F4 — Scene-level cloud and pixel-level usability are genuinely separate.** ACOLITE has no scene-cloud concept at all. That gate stays in discovery, permanently; pixel usability is ACOLITE's `l2_flags`. They belong in different components.
-
-**F5 — For sargassum, ACOLITE gives indices, not detection.** `fai`, `afai` and `fait` are native but **unmasked** — computed over land, cloud and water alike. No biomass, no unmixing, no aggregation, no tracking. Wang & Hu's own published method needs all of those on top of the index.
-
-**A correction to an earlier finding:** `CURRENT_STATE.md` called the `EARTHDATA_*` entries dead configuration to delete. They are dead *as spelled* — ACOLITE wants `EARTHDATA_u`/`EARTHDATA_p` — but the requirement they anticipated is real and mandatory. The recommendation changes from **remove** to **rename and wire up**.
-
-Detail, with confidence ratings and the responsibility matrix: [`research/ACOLITE_TECHNICAL_BASELINE.md`](research/ACOLITE_TECHNICAL_BASELINE.md).
-
----
-
-## 6. What survives, what goes
-
-| Keep | Replace or reconsider |
-|---|---|
-| Config, AOI handling, the provider abstraction | Discovery **target** — must serve whole L1C products |
-| Local STAC catalogue (ACOLITE has none) | Band-level download granularity → whole SAFE |
-| SHA-256 manifests, atomic publish, re-verification | Pre-ACOLITE clipping, reprojection, resampling |
-| Scene-level cloud gate at discovery | Normalization as a *pre*-ACOLITE step |
-| Doing nothing about radiometry (now provably correct) | — |
-
-**Build new:** orchestration and job state, failure detection by log parsing, sargassum logic above the index, and the viewer.
-
----
-
-## 7. Environment ready
-
-| Component | Location |
-|---|---|
-| ACOLITE clone (official, `20260421.0` is the pin candidate) | `~/acolite` |
-| Runnable environment (gdal 3.13.3, netCDF4, zarr) | `~/micromamba/envs/acolite` |
-| Credentials template, permissions set | `~/.netrc` |
-
-`pyproject.toml` and `uv.lock` untouched — installing ACOLITE into the project is an architecture decision, deliberately not taken.
-
-**Outstanding:** EarthData account with **OB.DAAC** and **LP DAAC** approvals (administrative lead time), and CDSE registration. Without EarthData credentials ACOLITE silently substitutes default atmospheric values and produces lower-quality output with no error.
-
----
-
-## 8. Next
-
-1. **Engineering interview** — the sixteen open questions in the technical baseline §13. The highest-impact single tuning value is `l2w_mask_threshold`: its default masks turbid coastal water as land, which is precisely the water this project measures.
-2. **Architecture** — after the interview, not before.
-3. **Then** the rollout sequence in PRD §11: single scene end to end → bounded backfill (which measures real cloud sparsity before the viewer is built on top of it) → viewer → periodic updates.
-
-**Still unknown, and each rated for impact:** eleven items in technical baseline §14. None blocks the interview; each should close before its corresponding design decision.
+El orden de despliegue que fija el PRD §11 sigue vigente, y su paso 3 es el que más información nueva aporta: **un backfill acotado a una temporada** mide la escasez real por nubosidad *antes* de construir el visor encima.

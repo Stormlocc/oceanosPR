@@ -7,6 +7,8 @@ updated: 2026-09-11T00:00:00Z
 
 # OCEANOS PR — Coastal Satellite Products and Viewer
 
+> **Baseline note (2026-09-12):** work now proceeds on branch `master`, created fresh at `acc6072` and renamed over the previous one. The Fase 6 (`423e485`) and Fase 7 (`74160a8`) commits are **abandoned and unreachable from any ref** — deliberately left to be garbage-collected. References below to `master` holding Fase 6/7 describe the state before that change.
+
 Product intent for the next phase of the OCEANOS Puerto Rico platform. Establishes what is being built, for whom, and against what measurable success. **Not an architecture document** — implementation decisions are deliberately deferred.
 
 **Baseline:** the platform as assessed in `CURRENT_STATE.md` (same topic folder). Pipeline runs discovery → local catalog → verified download → spatial normalization, and stops there. Everything this PRD describes is new.

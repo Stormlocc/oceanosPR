@@ -1,5 +1,7 @@
 # OCEANOS Puerto Rico — Current State Assessment
 
+> **Baseline note (2026-09-12):** work now proceeds on branch `master`, created fresh at `acc6072` and renamed over the previous one. The Fase 6 (`423e485`) and Fase 7 (`74160a8`) commits are **abandoned and unreachable from any ref** — deliberately left to be garbage-collected. References below to `master` holding Fase 6/7 describe the state before that change.
+
 **Scope:** complete local repository assessment prior to designing the remaining system.
 **Method:** every `src/` and `tests/` file at the baseline was read in full. Test suite executed. No production code modified.
 
