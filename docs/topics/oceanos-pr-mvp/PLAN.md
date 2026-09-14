@@ -374,6 +374,19 @@ that T24 requires.
   - **scene D candidates**: the three `19QGV` products with the highest `cloudCover` among overpasses
     ≥ 60 days old. After Run D, the one whose **measured** AOI valid fraction lies in (0, 0.20) is the
     `cloudy/` fixture; the next candidate is tried if none qualifies (B11).
+
+  Their names and `Id`s are written to `.work/oceanos-pr-mvp/spikes/scenes.json`. Scene ids are
+  **never hard-coded in this plan** (finding 10).
+
+  **Tooling for parts 1–2 (clarified 2026-09-14).** The OData query is run by a **throwaway spike
+  script**, `.work/oceanos-pr-mvp/spikes/discover_l1c.py`. It uses stdlib only, is uncommitted, and is
+  not production code. It implements exactly the `contracts.md` §1.2 filter (`productType eq
+  'S2MSI1C'`).
+  - It must **not** import or reuse `oceanos.catalog` (the current provider is L2A/Earth Search).
+  - It does not bring forward the Phase 2.1 migration; that migration stays in Phase 2.1.
+  - Nothing under `src/` or `tests/` changes for the spikes.
+- [ ] **Spike, part 2: download.** `.work/oceanos-pr-mvp/spikes/fetch_safe.py` is throwaway and
+  uncommitted, and uses stdlib only. It:
   - obtains a Keycloak password-grant token (`client_id=cdse-public`, `~/.netrc` machine `cdse`);
   - streams `https://download.dataspace.copernicus.eu/odata/v1/Products(<Id>)/$value` to `.part`;
   - checks `Content-Length == ContentLength` and MD5 against the catalogue;
