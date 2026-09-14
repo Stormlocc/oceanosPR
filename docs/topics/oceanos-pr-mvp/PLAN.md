@@ -323,7 +323,7 @@ A small horizontal prerequisite, about 150 LOC.
 - `git branch --show-current` prints `feat/oceanos-pr-mvp`.
 - `git ls-files .agents | wc -l` prints `0`.
 
-### Phase 1: ACOLITE environment and feasibility spikes [TODO]
+### Phase 1: ACOLITE environment and feasibility spikes [DOING]
 
 Resolves V1, V2, V3, V6 and V7 **before** any code depends on them (OD1). Produces the real fixtures
 that T24 requires.
