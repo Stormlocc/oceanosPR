@@ -347,6 +347,24 @@ that T24 requires.
   - that `~/.netrc` has machines `earthdata` and `cdse` with mode `600`;
   - **that the micromamba env satisfies the tag's `environment.yml`**: every listed package is
     importable, with version drift reported (finding 25).
+  - **Pinned source (resolved 2026-09-14, Phase 1 blocker raised by the implementer).**
+    - URL: `https://www.soest.hawaii.edu/pwessel/gshhg/gshhg-shp-2.3.7.zip`, the official GSHHG
+      page. The NOAA NGDC mirror path returns 404.
+    - Expected size: `149157845` bytes.
+    - **Accepted SHA-256:** `8dbbe7e071e77e9e75f2d639239099ebca8d5c16d6a07df8169729d49f15cf41`.
+    - Members used: `GSHHS_shp/f/GSHHS_f_L1.{shp,shx,dbf,prj}`, i.e. full resolution, level 1 land.
+  - **Provenance of the checksum.** Upstream publishes no checksum. The value was measured by
+    downloading the file independently over **HTTP** and over **FTP**
+    (`ftp://ftp.soest.hawaii.edu/gshhg/gshhg-shp-2.3.7.zip`).
+    - Both SHA-256 values are identical.
+    - The size equals the server `Content-Length`.
+    - `zipfile.testzip()` reports no CRC error.
+    - The server `Last-Modified` is 2017-06-15, a stable release.
+
+    Both copies are served by the same institution. This is an *accepted* checksum, recorded as
+    such, not an upstream-published one. The script pins it; it must not compute and trust it at
+    run time (B12).
+  - **Extraction** uses Python's standard `zipfile`; `unzip` is not installed on the host.
 - [ ] **Spike, part 1: select scenes from recorded discovery.** Run the live OData query of
   `contracts.md` §1.2 for **[run date − 75 d, run date − 60 d]** and **[run date − 30 d, run date]**, windows computed relative to the execution date (B11). Save the JSON to
   `.work/oceanos-pr-mvp/spikes/discovery.json`. From it, pick:
