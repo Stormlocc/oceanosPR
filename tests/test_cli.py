@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -34,9 +34,24 @@ def test_module_help_returns_successfully() -> None:
     assert "NASA OCEANOS Puerto Rico" in result.stdout
 
 
+def test_console_script_help_returns_successfully() -> None:
+    result = subprocess.run(
+        ["uv", "run", "oceanospr", "--help"],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "usage:" in result.stdout.lower()
+    assert "NASA OCEANOS Puerto Rico" in result.stdout
+
+
 
 def test_aoi_info_uses_replaceable_configuration(tmp_path, capsys):
     import yaml
+
     from oceanos.__main__ import main
 
     config = yaml.safe_load((PROJECT_ROOT / "configs/mvp.yaml").read_text())
@@ -56,6 +71,7 @@ def test_aoi_info_uses_replaceable_configuration(tmp_path, capsys):
 def test_aoi_info_reports_missing_file(tmp_path, capsys):
     import pytest
     import yaml
+
     from oceanos.__main__ import main
 
     config = yaml.safe_load((PROJECT_ROOT / "configs/mvp.yaml").read_text())
@@ -81,7 +97,9 @@ def _scene_config(tmp_path):
 
 def test_scenes_cli_table_and_normalized_output(monkeypatch, tmp_path, capsys):
     import json
+
     import httpx
+
     from oceanos.__main__ import main
     from oceanos.catalog import SceneSearchResult, Sentinel2Provider
 
@@ -109,7 +127,9 @@ def test_scenes_cli_table_and_normalized_output(monkeypatch, tmp_path, capsys):
 
 def test_scenes_cli_empty_json(monkeypatch, tmp_path, capsys):
     import json
+
     import httpx
+
     from oceanos.__main__ import main
     from oceanos.catalog import Sentinel2Provider
 
@@ -127,6 +147,7 @@ def test_scenes_cli_empty_json(monkeypatch, tmp_path, capsys):
 def test_scenes_cli_remote_failure_preserves_previous_output(monkeypatch, tmp_path, capsys):
     import httpx
     import pytest
+
     from oceanos.__main__ import main
     from oceanos.catalog import Sentinel2Provider
 

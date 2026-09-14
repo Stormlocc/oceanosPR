@@ -433,3 +433,16 @@ alineación exacta de todas las bandas. Se usan rasters sintéticos pequeños y 
 se consulta Internet. No se calculan FAI, NDVI ni otros índices científicos.
 
 Referencia: [reproyección con Rasterio](https://rasterio.readthedocs.io/en/stable/topics/reproject.html).
+
+## Fase 0: preparación del MVP ACOLITE
+
+La preparación del MVP corrige el script de consola a `oceanospr`, elimina la
+dependencia no utilizada `pandas` y añade Ruff y mypy al grupo de desarrollo.
+Ruff apunta a Python 3.11; mypy opera en modo estricto cuando se incorporen los
+paquetes nuevos definidos por el plan.
+
+`tests/test_architecture.py` protege los límites iniciales del MVP: ACOLITE y
+procesamiento no se importan mutuamente, la API no importa escritores ni
+etapas de procesamiento, el dominio no depende de otros paquetes OCEANOS y el
+vocabulario de ACOLITE queda restringido a su adaptador. La suite predeterminada
+continúa siendo offline.

@@ -284,25 +284,25 @@ These carry the tags `[EXEC-SHAPE]` or `[FALLBACK]` in the phase bodies.
 
 ---
 
-### Phase 0: Branch, hygiene, tooling [TODO]
+### Phase 0: Branch, hygiene, tooling [DONE]
 
 A small horizontal prerequisite, about 150 LOC.
 
-- [ ] **Branch.** Create `feat/oceanos-pr-mvp` from `master`. Its first commit holds
+- [x] **Branch.** Create `feat/oceanos-pr-mvp` from `master`. Its first commit holds
   `docs/topics/oceanos-pr-mvp/design/`, `PLAN.md` and `.claude/settings.json`; the only diff in
   that file is `enabledPlugins`, verified. **`.agents/` is not committed** (untracked by rule
   for this plan; see Open questions).
-- [ ] **Console script.** Set `pyproject.toml` `oceanospr = "oceanos.__main__:main"`
+- [x] **Console script.** Set `pyproject.toml` `oceanospr = "oceanos.__main__:main"`
   (`CURRENT_STATE.md` §2.14).
-- [ ] **Stale build output.** Delete the untracked `src/nasa_oceanos_pr.egg-info/` directory from
+- [x] **Stale build output.** Delete the untracked `src/nasa_oceanos_pr.egg-info/` directory from
   disk. `.gitignore` already ignores it.
-- [ ] **Dependencies.** Remove `pandas`. Nothing imports it, and the series use SQLite (T8).
-- [ ] **`.env.example`.** Replace the `EARTHDATA_USERNAME`/`EARTHDATA_PASSWORD` lines with a
+- [x] **Dependencies.** Remove `pandas`. Nothing imports it, and the series use SQLite (T8).
+- [x] **`.env.example`.** Replace the `EARTHDATA_USERNAME`/`EARTHDATA_PASSWORD` lines with a
   comment: credentials live in `~/.netrc` (machines `earthdata`, `cdse`).
-- [ ] **Dev tools (OD3).** Add `ruff` and `mypy` to the dev group, configured in `pyproject.toml`.
+- [x] **Dev tools (OD3).** Add `ruff` and `mypy` to the dev group, configured in `pyproject.toml`.
   Fix whatever ruff reports on the existing ~1 400 LOC; a `ruff format` pass goes in its own
   structural commit. `mypy` strict applies to the new packages only as they appear.
-- [ ] **`tests/test_architecture.py` (D-7).** Enforces A1–A3 as an **AST import scan** and A4 as a
+- [x] **`tests/test_architecture.py` (D-7).** Enforces A1–A3 as an **AST import scan** and A4 as a
   **string-literal scan**.
   - A4 matches only **`key=` patterns** for ACOLITE-owned setting keys (e.g. `l2w_parameters=`,
     `dsf_aot_estimate=`), skip-message fragments, and the wavelength-suffixed variable regex
