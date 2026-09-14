@@ -1,11 +1,11 @@
 """A single, explicit metric raster grid shared by every normalized band."""
 
-from dataclasses import dataclass
 import math
+from dataclasses import dataclass
 from pathlib import Path
 
-from pyproj import CRS as Projection
 import rasterio
+from pyproj import CRS as Projection
 from rasterio.crs import CRS
 from rasterio.transform import Affine, array_bounds
 from rasterio.warp import calculate_default_transform

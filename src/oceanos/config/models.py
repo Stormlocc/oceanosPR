@@ -6,9 +6,13 @@ from pathlib import Path
 from typing import ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
 from pyproj import CRS
 from pyproj.exceptions import CRSError
-from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 
 class AOISettings(BaseModel):
@@ -137,7 +141,7 @@ class OceanosSettings(BaseSettings):
         del settings_cls
         return env_settings, init_settings, dotenv_settings, file_secret_settings
 
-    def resolve_paths(self, base_dir: Path) -> "OceanosSettings":
+    def resolve_paths(self, base_dir: Path) -> OceanosSettings:
         """Return a copy whose paths are absolute and normalized.
 
         Args:

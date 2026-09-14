@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from contextlib import nullcontext
-from datetime import date, datetime, time, timezone
-from email.utils import parsedate_to_datetime
 import json
 import math
 import time as clock
+from contextlib import nullcontext
+from datetime import UTC, date, datetime, time
+from email.utils import parsedate_to_datetime
 from urllib.parse import urljoin, urlsplit
 
 import httpx
@@ -24,12 +24,12 @@ def _datetime(value: datetime | str, *, end: bool = False) -> datetime:
         if isinstance(value, str):
             if len(value) == 10:
                 return datetime.combine(
-                    date.fromisoformat(value), time.max if end else time.min, timezone.utc
+                    date.fromisoformat(value), time.max if end else time.min, UTC
                 )
-            value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            value = datetime.fromisoformat(value)
         if not isinstance(value, datetime) or value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("datetime must include a timezone")
-        return value.astimezone(timezone.utc)
+        return value.astimezone(UTC)
     except (ValueError, TypeError) as exc:
         raise ValueError(f"Invalid datetime {value!r}: use YYYY-MM-DD or an ISO datetime with timezone") from exc
 
@@ -126,7 +126,7 @@ class Sentinel2Provider(SceneProvider):
                     body = next_link.get("body", {})
                     headers = next_link.get("headers", {})
                     if not isinstance(body, dict) or not isinstance(headers, dict):
-                        raise ValueError("Next link body and headers must be objects")
+                        raise TypeError("Next link body and headers must be objects")
                     if not all(isinstance(k, str) and isinstance(v, str) for k, v in headers.items()):
                         raise ValueError("Next link headers must contain strings")
                     if next_link.get("merge", False):
@@ -159,7 +159,7 @@ class Sentinel2Provider(SceneProvider):
                         delay = float(retry_after)
                     except ValueError:
                         try:
-                            delay = (parsedate_to_datetime(retry_after) - datetime.now(timezone.utc)).total_seconds()
+                            delay = (parsedate_to_datetime(retry_after) - datetime.now(UTC)).total_seconds()
                         except (ValueError, TypeError, OverflowError):
                             pass
                 clock.sleep(min(30, max(0, delay)))

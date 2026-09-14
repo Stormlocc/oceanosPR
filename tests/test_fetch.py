@@ -1,16 +1,25 @@
 """One-scene materialization, with synthetic streams and no network access."""
 
 import hashlib
-import json
-from pathlib import Path
 import socket
+from pathlib import Path
 
 import httpx
 import pytest
 
 from oceanos.aoi import load_aoi
-from oceanos.catalog import LocalCatalogError, LocalSceneCatalog, SceneAsset, SceneMetadata
-from oceanos.ingestion import MVP_BANDS, MaterializationError, SceneManifest, fetch_scene
+from oceanos.catalog import (
+    LocalCatalogError,
+    LocalSceneCatalog,
+    SceneAsset,
+    SceneMetadata,
+)
+from oceanos.ingestion import (
+    MVP_BANDS,
+    MaterializationError,
+    SceneManifest,
+    fetch_scene,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 PAYLOAD = b"synthetic raster bytes for transfer tests"
@@ -137,9 +146,10 @@ class InterruptedStream(httpx.SyncByteStream):
 def test_interrupted_download_never_publishes_partial_file(catalog, scene, tmp_path):
     def handler(request):
         return httpx.Response(200, stream=InterruptedStream(), headers={"Content-Length": str(len(PAYLOAD))})
-    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
-        with pytest.raises(MaterializationError, match="transfer failed"):
-            fetch_scene(catalog, scene.scene_id, tmp_path / "raw", bands=["B02"], client=client)
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client, pytest.raises(
+        MaterializationError, match="transfer failed"
+    ):
+        fetch_scene(catalog, scene.scene_id, tmp_path / "raw", bands=["B02"], client=client)
     assert not (directory(tmp_path, scene) / "B02.tif").exists()
     assert not list(directory(tmp_path, scene).glob("*.part"))
     manifest = SceneManifest.model_validate_json(manifest_path(tmp_path, scene).read_text())
@@ -165,9 +175,8 @@ def test_interruption_retains_completed_bands_for_retry(catalog, scene, tmp_path
         if request.url.path == "/green.tif":
             return httpx.Response(200, stream=InterruptedStream())
         return httpx.Response(200, content=PAYLOAD)
-    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
-        with pytest.raises(MaterializationError):
-            fetch_scene(catalog, scene.scene_id, tmp_path / "raw", client=client)
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client, pytest.raises(MaterializationError):
+        fetch_scene(catalog, scene.scene_id, tmp_path / "raw", client=client)
     result = SceneManifest.model_validate_json(manifest_path(tmp_path, scene).read_text())
     assert list(result.assets) == ["B02"]
     assert result.status == "partial"
@@ -182,18 +191,16 @@ def test_missing_asset_preflight_prevents_any_download(scene, tmp_path):
     catalog = LocalSceneCatalog(tmp_path / "catalog")
     catalog.add_scene(scene)
     calls = []
-    with mock_client(calls) as client:
-        with pytest.raises(MaterializationError, match="no asset for band B11"):
-            fetch_scene(catalog, scene.scene_id, tmp_path / "raw", client=client)
+    with mock_client(calls) as client, pytest.raises(MaterializationError, match="no asset for band B11"):
+        fetch_scene(catalog, scene.scene_id, tmp_path / "raw", client=client)
     assert not calls
     assert not directory(tmp_path, scene).exists()
 
 
 def test_missing_scene_does_not_download(catalog, tmp_path):
     calls = []
-    with mock_client(calls) as client:
-        with pytest.raises(MaterializationError, match="does not exist"):
-            fetch_scene(catalog, "missing", tmp_path / "raw", client=client)
+    with mock_client(calls) as client, pytest.raises(MaterializationError, match="does not exist"):
+        fetch_scene(catalog, "missing", tmp_path / "raw", client=client)
     assert not calls
 
 

@@ -2,25 +2,30 @@
 
 import hashlib
 import json
-from pathlib import Path
 import socket
+from pathlib import Path
 
 import numpy as np
-from pyproj import CRS as Projection
 import pytest
 import rasterio
+import yaml
+from pyproj import CRS as Projection
 from rasterio.crs import CRS
 from rasterio.transform import Affine, array_bounds, from_origin
 from rasterio.warp import transform_bounds
 from shapely.geometry import Polygon, box
-import yaml
 
 from oceanos.aoi import AOI
 from oceanos.catalog import LocalSceneCatalog, SceneAsset, SceneMetadata
 from oceanos.ingestion import MaterializationError
 from oceanos.ingestion.fetch import MaterializedAsset, SceneManifest
-from oceanos.processing import GridSpec, assert_aligned, build_grid, normalize_band, normalize_scene
-from oceanos.processing.grid import buffered_aoi
+from oceanos.processing import (
+    GridSpec,
+    assert_aligned,
+    build_grid,
+    normalize_band,
+    normalize_scene,
+)
 
 CRS_UTM = "EPSG:32619"
 ROOT = Path(__file__).resolve().parents[1]
@@ -233,8 +238,8 @@ def test_partial_or_corrupt_materialization_is_rejected(materialized_scene, tmp_
 
 
 def test_failure_preserves_previous_aligned_set(materialized_scene, tmp_path, monkeypatch):
-    catalog, scene_id, region, paths = materialized_scene
-    kwargs = dict(raw_dir=tmp_path / "raw", intermediate_dir=tmp_path / "intermediate")
+    catalog, scene_id, region, _paths = materialized_scene
+    kwargs = {"raw_dir": tmp_path / "raw", "intermediate_dir": tmp_path / "intermediate"}
     result = normalize_scene(catalog, scene_id, region, **kwargs)
     output = Path(result["output_directory"])
     original = {path.name: path.read_bytes() for path in output.iterdir()}
@@ -252,7 +257,7 @@ def test_failure_preserves_previous_aligned_set(materialized_scene, tmp_path, mo
 
 def test_cli_config_resolution_and_report(materialized_scene, tmp_path, capsys):
     from oceanos.__main__ import main
-    catalog, scene_id, region, paths = materialized_scene
+    catalog, scene_id, region, _paths = materialized_scene
     aoi_path = tmp_path / "aoi.geojson"
     region.save(aoi_path)
     config = yaml.safe_load((ROOT / "configs/mvp.yaml").read_text())

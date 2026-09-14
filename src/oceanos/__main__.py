@@ -8,8 +8,12 @@ from pathlib import Path
 
 from oceanos.aoi import AOIError, get_bounds, load_aoi, validate_aoi
 from oceanos.catalog import (
-    LocalCatalogError, LocalSceneCatalog, SceneMetadata,
-    SceneProviderError, SceneSearchResult, Sentinel2Provider,
+    LocalCatalogError,
+    LocalSceneCatalog,
+    SceneMetadata,
+    SceneProviderError,
+    SceneSearchResult,
+    Sentinel2Provider,
 )
 from oceanos.config import ConfigurationError, load_config
 from oceanos.ingestion import MVP_BANDS, MaterializationError, fetch_scene
@@ -139,6 +143,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"Manifest: {Path(raw_dir).expanduser().resolve() / 'sentinel2' / args.scene_id / 'manifest.json'}")
     elif args.command == "process":
         from rasterio.errors import RasterioError
+
         from oceanos.processing import NormalizationError, normalize_scene
 
         try:

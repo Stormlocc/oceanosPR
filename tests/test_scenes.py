@@ -1,15 +1,21 @@
 """STAC remote is mocked at the HTTP boundary; no Internet or imagery."""
 
+import json
 from copy import deepcopy
 from datetime import datetime
-import json
 from pathlib import Path
 
 import httpx
 import pytest
 
 from oceanos.aoi import load_aoi
-from oceanos.catalog import SceneMetadata, SceneProvider, SceneProviderError, SceneSearchResult, Sentinel2Provider
+from oceanos.catalog import (
+    SceneMetadata,
+    SceneProvider,
+    SceneProviderError,
+    SceneSearchResult,
+    Sentinel2Provider,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures"
 CATALOG = "https://catalog.example"

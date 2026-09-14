@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from copy import deepcopy
-from datetime import datetime, timezone
-from hashlib import sha256
 import os
-from pathlib import Path
 import tempfile
+from copy import deepcopy
+from datetime import UTC, datetime
+from hashlib import sha256
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -73,7 +73,7 @@ def scene_to_stac_item(
     ingested_at: datetime | None = None,
 ) -> pystac.Item:
     """Copy scientific metadata verbatim; add local provenance separately."""
-    registered = ingested_at if ingested_at is not None else datetime.now(timezone.utc)
+    registered = ingested_at if ingested_at is not None else datetime.now(UTC)
     if registered.tzinfo is None or registered.utcoffset() is None:
         raise ValueError("ingested_at must include a timezone")
     if not source_provider.strip():
@@ -88,7 +88,7 @@ def scene_to_stac_item(
             "oceanos:source_catalog": scene.source_catalog,
             "oceanos:original_scene_id": scene.scene_id,
             "oceanos:source_provider": source_provider,
-            "oceanos:ingested_at": registered.astimezone(timezone.utc).isoformat(),
+            "oceanos:ingested_at": registered.astimezone(UTC).isoformat(),
             "oceanos:processing_status": "discovered",
         },
     )

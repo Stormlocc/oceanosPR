@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from contextlib import nullcontext
-from datetime import datetime, timezone
 import hashlib
 import math
 import os
-from pathlib import Path
 import re
 import tempfile
+from collections.abc import Sequence
+from contextlib import nullcontext
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
 
@@ -184,7 +184,7 @@ def _download(
         os.replace(temporary, destination)
         return MaterializedAsset(
             asset_key=key, source_url=asset.href, local_path=destination.name,
-            download_timestamp=datetime.now(timezone.utc), file_size=size, sha256=digest.hexdigest(),
+            download_timestamp=datetime.now(UTC), file_size=size, sha256=digest.hexdigest(),
         )
     except httpx.HTTPError as exc:
         raise MaterializationError(f"Asset {key}: transfer failed ({type(exc).__name__})") from exc
@@ -252,7 +252,7 @@ def fetch_scene(
             del manifest.assets[band]
             manifest.failures[band] = FailedAsset(
                 asset_key=record.asset_key, source_url=record.source_url,
-                timestamp=datetime.now(timezone.utc), error="Local integrity verification failed",
+                timestamp=datetime.now(UTC), error="Local integrity verification failed",
             )
     _sync(manifest, path, catalog)
     context = nullcontext(client) if client is not None else httpx.Client()
@@ -264,7 +264,7 @@ def fetch_scene(
                 manifest.assets[band] = _download(transport, asset, key, directory / _filename(band, asset), timeout)
             except (MaterializationError, OSError) as exc:
                 manifest.failures[band] = FailedAsset(
-                    asset_key=key, source_url=asset.href, timestamp=datetime.now(timezone.utc), error=str(exc),
+                    asset_key=key, source_url=asset.href, timestamp=datetime.now(UTC), error=str(exc),
                 )
                 _sync(manifest, path, catalog)
                 raise MaterializationError(f"Could not materialize {scene_id} band {band}: {exc}") from exc

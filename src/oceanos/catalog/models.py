@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime as DateTime, timezone
 import json
+from datetime import UTC
+from datetime import datetime as DateTime
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -51,7 +52,7 @@ class SceneMetadata(MetadataModel):
     @field_validator("datetime")
     @classmethod
     def utc_datetime(cls, value: DateTime) -> DateTime:
-        return value.astimezone(timezone.utc)
+        return value.astimezone(UTC)
 
 
 class SceneSearchResult(MetadataModel):

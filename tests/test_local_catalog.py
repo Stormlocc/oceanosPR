@@ -1,21 +1,26 @@
 """Local STAC persistence and reconstruction, with network access forbidden."""
 
-from datetime import datetime, timezone
 import json
-from pathlib import Path
 import shutil
 import socket
+from datetime import UTC, datetime
+from pathlib import Path
 
-from jsonschema import Draft7Validator
-from referencing import Registry, Resource
 import pystac
-from pystac.validation.local_validator import get_local_schema_cache
 import pytest
+from jsonschema import Draft7Validator
+from pystac.validation.local_validator import get_local_schema_cache
+from referencing import Registry, Resource
 
 from oceanos.aoi import load_aoi
 from oceanos.catalog import (
-    LocalCatalogError, LocalSceneCatalog, SceneAsset, SceneMetadata,
-    SceneSearchResult, scene_from_stac_item, scene_to_stac_item,
+    LocalCatalogError,
+    LocalSceneCatalog,
+    SceneAsset,
+    SceneMetadata,
+    SceneSearchResult,
+    scene_from_stac_item,
+    scene_to_stac_item,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -153,7 +158,7 @@ def test_conversion_roundtrip_with_multipolygon_and_optional_metadata(scene, opt
     if optional:
         data.update(platform=None, cloud_cover=None, assets={})
     scene = SceneMetadata.model_validate(data)
-    ingested = datetime(2024, 2, 1, tzinfo=timezone.utc)
+    ingested = datetime(2024, 2, 1, tzinfo=UTC)
     item = scene_to_stac_item(scene, ingested_at=ingested, source_provider="test-provider")
     assert scene_from_stac_item(pystac.Item.from_dict(item.to_dict())) == scene
     assert item.properties["oceanos:source_provider"] == "test-provider"
@@ -163,7 +168,7 @@ def test_conversion_roundtrip_with_multipolygon_and_optional_metadata(scene, opt
 def test_multiple_original_collections_and_extents(tmp_path, scene):
     catalog = LocalSceneCatalog(tmp_path / "catalog")
     catalog.add_scene(scene)
-    later = scene.model_copy(update={"scene_id": "later", "datetime": datetime(2024, 2, 1, tzinfo=timezone.utc)})
+    later = scene.model_copy(update={"scene_id": "later", "datetime": datetime(2024, 2, 1, tzinfo=UTC)})
     catalog.add_scene(later)
     other = scene.model_copy(update={"scene_id": "other", "collection": "sentinel-2-l1c"})
     catalog.add_scene(other)
@@ -186,15 +191,16 @@ def test_local_search_filters(tmp_path, scene):
     assert catalog.search_local_catalog(platform="other") == []
     assert catalog.search_local_catalog(collection="other") == []
     assert len(catalog.search_local_catalog(start_datetime=scene.datetime, end_datetime=scene.datetime)) == 3
-    assert catalog.search_local_catalog(start_datetime=datetime(2025, 1, 1, tzinfo=timezone.utc)) == []
+    assert catalog.search_local_catalog(start_datetime=datetime(2025, 1, 1, tzinfo=UTC)) == []
     aoi = load_aoi(ROOT / "tests/fixtures/aoi.geojson", target_crs="EPSG:3857")
     assert len(catalog.search_local_catalog(aoi=aoi)) == 3
     from shapely.affinity import translate
+
     from oceanos.aoi import AOI
     moved = AOI("elsewhere", translate(aoi.geometry, xoff=1_000_000), aoi.crs)
     assert catalog.search_local_catalog(aoi=moved) == []
     with pytest.raises(ValueError):
-        catalog.search_local_catalog(start_datetime=datetime(2024, 1, 1))
+        catalog.search_local_catalog(start_datetime=datetime.fromisoformat("2024-01-01T00:00:00"))
 
 
 def test_arbitrary_ids_do_not_escape_catalog_directory(tmp_path, scene):

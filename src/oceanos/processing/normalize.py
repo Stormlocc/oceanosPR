@@ -1,12 +1,12 @@
 """Windowed spatial normalization; no radiometric calibration or indices."""
 
-from datetime import datetime, timezone
 import json
 import os
-from pathlib import Path
 import shutil
 import sys
 import tempfile
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Literal
 
 import numpy as np
@@ -164,7 +164,7 @@ def normalize_scene(
             assert_aligned(staging / f"{band}.tif", grid)
         report = {
             "schema_version": "1.0", "scene_id": scene_id,
-            "normalized_at": datetime.now(timezone.utc).isoformat(),
+            "normalized_at": datetime.now(UTC).isoformat(),
             "grid": grid.to_dict(), "reference_band": reference_band, "buffer_m": buffer_m,
             "output_directory": str(output), "bands": bands,
             "output_size_bytes": sum(band["file_size"] for band in bands.values()),
