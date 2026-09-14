@@ -1,5 +1,7 @@
 {
   "enabledPlugins": {
-    "discovery@melodic-software": true
+    "discovery@melodic-software": true,
+    "geoai-skills@geoai-skills": true,
+    "planning@melodic-software": true
   }
 }
