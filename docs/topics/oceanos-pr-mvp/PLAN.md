@@ -328,14 +328,14 @@ A small horizontal prerequisite, about 150 LOC.
 Resolves V1, V2, V3, V6 and V7 **before** any code depends on them (OD1). Produces the real fixtures
 that T24 requires.
 
-- [ ] **`scripts/acolite_env.sh`** supports `--check`, `--dry-run` and idempotent re-runs. It:
+- [x] **`scripts/acolite_env.sh`** supports `--check`, `--dry-run` and idempotent re-runs. It:
   - moves the current `~/acolite` to `~/acolite.main-d61c8de` (kept, not deleted);
   - clones tag `20260421.0` with full history of that tag;
   - asserts `HEAD == f73cbe73887c2b114d9d3c70865effee73871525`;
   - appends `version=20260421.0` to `config/config.txt` if absent (Q15);
   - runs `launch_acolite.py --retrieve_luts --sensor S2A_MSI,S2B_MSI,S2C_MSI`.
-- [ ] **Runtime dependency `pyogrio`** (vector reader for the GSHHG shapefile; B12), added in this phase with `uv add`.
-- [ ] **`scripts/fetch_gshhg.sh`**, idempotent, with the **expected archive sha256 pinned in the script** (not written by it; B12), downloads GSHHG (full
+- [x] **Runtime dependency `pyogrio`** (vector reader for the GSHHG shapefile; B12), added in this phase with `uv add`.
+- [x] **`scripts/fetch_gshhg.sh`**, idempotent, with the **expected archive sha256 pinned in the script** (not written by it; B12), downloads GSHHG (full
   resolution, level 1 land polygons) into OCEANOS-owned `data/external/gshhg/`. OCEANOS, not ACOLITE,
   applies the land mask (DA-1).
 
@@ -365,7 +365,7 @@ that T24 requires.
     such, not an upstream-published one. The script pins it; it must not compute and trust it at
     run time (B12).
   - **Extraction** uses Python's standard `zipfile`; `unzip` is not installed on the host.
-- [ ] **Spike, part 1: select scenes from recorded discovery.** Run the live OData query of
+- [x] **Spike, part 1: select scenes from recorded discovery.** Run the live OData query of
   `contracts.md` §1.2 for **[run date − 75 d, run date − 60 d]** and **[run date − 30 d, run date]**, windows computed relative to the execution date (B11). Save the JSON to
   `.work/oceanos-pr-mvp/spikes/discovery.json`. From it, pick:
   - **scene A**: the `19QGV` product of the first overpass dated ≥ 50 days before today
@@ -385,7 +385,7 @@ that T24 requires.
   - It must **not** import or reuse `oceanos.catalog` (the current provider is L2A/Earth Search).
   - It does not bring forward the Phase 2.1 migration; that migration stays in Phase 2.1.
   - Nothing under `src/` or `tests/` changes for the spikes.
-- [ ] **Spike, part 2: download.** `.work/oceanos-pr-mvp/spikes/fetch_safe.py` is throwaway and
+- [x] **Spike, part 2: download.** `.work/oceanos-pr-mvp/spikes/fetch_safe.py` is throwaway and
   uncommitted, and uses stdlib only. It:
   - obtains a Keycloak password-grant token (`client_id=cdse-public`, `~/.netrc` machine `cdse`);
   - streams `https://download.dataspace.copernicus.eu/odata/v1/Products(<Id>)/$value` to `.part`;
@@ -394,7 +394,7 @@ that T24 requires.
 
   It is run for scenes A, B and D (~2.4 GB). **Scene A is downloaded twice**, and both SHA-256
   values are recorded, to test the re-acquisition determinism that D-3 depends on (DA #14).
-- [ ] **Spike, part 3: ACOLITE runs.** Both run under `/usr/bin/time -v` with explicit
+- [x] **Spike, part 3: ACOLITE runs.** Both run under `/usr/bin/time -v` with explicit
   `runid=att-<UTCstamp>-spike0001`.
   - **Run A.** Minimal settings from `contracts.md` §4.1: single tile, no `merge_tiles`,
     `limit` = AOI bounds + 1 px.
@@ -413,8 +413,8 @@ that T24 requires.
   - **Run D.** Same as A on the scene D candidates (cloudy).
   - **Run E.** Scene A with `limit` placed outside the tile footprint. This captures a **real skip
     message** and ACOLITE's exit 0 (`sentinel2/l1_convert.py:231`) for the `skipped/` fixture (B11).
-- [ ] **Record outcomes (D-8).** In `design/design-threads.md` §D, append to each V1, V2, V3, V6 and
-  V7 row the exact token `**Outcome (pin 20260421.0): verified**` or
+- [x] **Record outcomes (D-8).** In `design/design-threads.md` §D, append to each V1–V7 row the
+  exact token `**Outcome (pin 20260421.0): verified**` or
   `**Outcome (pin 20260421.0): refuted**`, followed by the evidence:
   - **V1 scope (clarified 2026-09-14):** the authorized criterion is the **single-tile** run (Run A,
     no `merge_tiles`), because T22b made single-tile the default and 19QGV covers the AOI. A merge
@@ -436,7 +436,7 @@ that T24 requires.
     - that L2R carries per-scene `sza`, `vza`, `raa` (mean geometry) so OCEANOS can compute the glint angle. The tag computes it only when `dsf_residual_glint_correction_glint_angle=True`, which also enables correction, forbidden by Q13 (`acolite_l2r.py:1500-1512`; B3);
     - for scene A, the fraction of water pixels each `l2_flags` bit covers (DA #22);
     - that `acolite_run_<id>_l2r_settings.txt` exists and carries the `flag_exponent_*` values (DA #10).
-- [ ] **`scripts/make_acolite_fixtures.py`** (committed dev tool). It runs in the ACOLITE env with
+- [x] **`scripts/make_acolite_fixtures.py`** (committed dev tool). It runs in the ACOLITE env with
   `netCDF4` only; there is no `import acolite`.
   - Crops Run A's L2R/L2W to a **256×256** window (2.56 km) containing land, the 150 m coastal buffer and **≥ 20 000 GSHHG water pixels outside that buffer**. The criterion is geometric only (clarified 2026-09-14): the shallow cut and the bathymetry dataset are Phase 3 decisions and are **not** applied here. `.work/oceanos-pr-mvp/spikes/run_a/` is kept until Phase 3 so the fixture can be re-cropped. It also writes a committed GSHHG clip `tests/fixtures/acolite/gshhg_clip.geojson` for that window (B12, B13), **rewriting `x`/`y` coordinates and the extent/limit
     attributes**, and keeping every other global and variable attribute.
@@ -455,13 +455,49 @@ that T24 requires.
     the documented alternative is `ancillary_data=False` + `s2_auxiliary_default=True` (ECMWF data
     inside the SAFE).
   - Scene A's two downloads have different SHA-256 → halt; reopen D-3 (re-acquisition identity).
+  - **ACTIVE HALT (2026-09-14): V8.** The SWIR non-water flag masks ~99 % of the AOI on every
+    observed scene, and ACOLITE blanks the water products there. The "usable fixture" contradiction
+    is a symptom, not the cause. Do **not** pick another scene to work around it. Phase 1 stays
+    `[DOING]` until the user decides the V8 remedy (glint handling / mask threshold / season), which
+    may amend Q7's threshold and Q13.
+- [ ] **V8 remedy spike, authorized by the user 2026-09-14 ("opción A autorizada").** No new
+  downloads for Run F. Outputs go under `.work/oceanos-pr-mvp/spikes/`. Nothing under `src/`,
+  `tests/` or the committed fixtures changes until the decision below is recorded.
+  - **Run F (option A).** Scene A, same settings as the valid Run A, plus:
+    - `dsf_residual_glint_correction=True` (`dsf_residual_glint_correction_method=default`,
+      `dsf_residual_glint_wave_range=1500,2400`, tag defaults);
+    - `l2w_mask_water_parameters=False`, so ACOLITE no longer blanks water products on flagged
+      pixels;
+    - `l2w_mask_threshold=0.05` unchanged; bit 0 is kept only as information;
+    - record the tag values of `glint_mask_rhos_wave` / `glint_mask_rhos_threshold` (1600 / 0.05),
+      and the log line proving glint correction ran.
+  - **Run G (cause isolation, same authorization).** One `19QGV` L1C scene from **January–February
+    2026** (lowest `cloudCover`, chosen with `discover_l1c.py`), run with **Run A settings**, i.e.
+    current pinned settings, no glint correction. Downloaded with `fetch_safe.py`.
+  - **Measure and record as V8 evidence in `design-threads.md`:**
+    1. **Candidate valid predicate for option A:** GSHHG water outside the 150 m buffer ∧ no cirrus
+       (bit 1) ∧ no high-TOA (bit 2) ∧ no negative-rhos (bit 3) ∧ finite product (fill `9.969e36`
+       treated as NaN). Report the fraction per product over that water, for Run F.
+    2. **Glint removal:** median and p90 of `rhow_1614` and `rhow_2202` over that water, Run F
+       vs Run A where both are defined. Target is a residual near 0.
+    3. **Bias check:** median `TUR_Nechad2016_665` and `rhow_665` in Run F vs Run A, over the pixels
+       where Run A had `flags == 0`.
+    4. **Side effects:** change in bit 3 (negative rhos) coverage between Run A and Run F;
+       per-bit coverage for Run F.
+    5. **Run G:** bit 0 fraction, `flags == 0` fraction, `rhot_1614` p10/p50 over water, and scene
+       `sza`/`vza`/`raa` with the specular angle (same method as V8).
+    6. One quicklook PNG each (not committed) of `TUR_Nechad2016_665` for Runs A and F, for the
+       user's visual check.
+  - **Stop and return to the user with the numbers.** The planner then proposes amendments to Q13,
+    to Q7's threshold role and to the DA-2 valid predicate (and, if Run G shows a seasonal cause,
+    to OD5). **No fixture is regenerated and Phase 1 is not closed before that decision.**
 
 **Sanity Check:**
 
 - `scripts/acolite_env.sh --check` exits 0.
 - `git -C ~/acolite rev-parse HEAD` prints `f73cbe73887c2b114d9d3c70865effee73871525`.
 - `grep -c '^version=20260421.0' ~/acolite/config/config.txt` prints `1`.
-- `grep -cE '\*\*Outcome \(pin 20260421\.0\): (verified|refuted)\*\*' docs/topics/oceanos-pr-mvp/design/design-threads.md` prints `5`.
+- `grep -cE '\*\*Outcome \(pin 20260421\.0\): (verified|refuted)\*\*' docs/topics/oceanos-pr-mvp/design/design-threads.md` prints `7`.
 - `grep -E '^\| \*\*V(1|2)\*\*' docs/topics/oceanos-pr-mvp/design/design-threads.md | grep -c 'Outcome (pin 20260421.0): refuted'`
   prints `0`. A refuted V1/V2 must stop the phase, not pass it.
 - `scripts/fetch_gshhg.sh --check` exits 0 (it compares the archive against the sha256 pinned in the script).
