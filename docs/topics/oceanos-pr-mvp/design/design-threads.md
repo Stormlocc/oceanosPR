@@ -303,7 +303,7 @@ hand-written, so the fake cannot drift from the real output shape.
 | **V5** | Can the project environment read ACOLITE NetCDF without new dependencies? | Conformance implementation | **Outcome (pin 20260421.0): verified** — project rasterio 1.4.4 / GDAL 3.10.3 opened Run A's real `l2_flags`, resolved `EPSG:32619`, and read the affine transform `(10, 0, 701150, 0, -10, 1991390)`. | none |
 | **V6** | Allowed characters and length of ACOLITE `runid` | `RunAttemptId` as `runid` | **Outcome (pin 20260421.0): verified** — `runid=att-20260914T221929Z-spike0001` was accepted and appears in Run A's resolved settings and output filenames. | none |
 | **V7** | Real storage per overpass (SAFE × tiles, workspace peak, L2R + L2W compressed, release) | P1 disk budget, retention sizing | **Outcome (pin 20260421.0): verified** — the 801,045,804-byte SAFE produced compressed L2R/L2W of 100,413,193/48,167,667 bytes in 4:55.68 at 1,700,624 KiB peak RSS; A′ produced 289,393,899/303,867,816 bytes in 5:00.17 at 1,556,780 KiB. The derived `acolite.timeout` is 1,200 s (3× Run A rounded up to the next 10 min). | P1 thresholds |
-| **V8** | **NEW, blocking (found 2026-09-14 while resolving the usable-fixture contradiction).** Does the pinned settings set (`l2w_mask_threshold=0.05`, glint correction off per Q13) leave usable water pixels over La Parguera? | Product premise (M2, R-7), Q7 threshold, Q13, DA-2 glint gate, OD5 season | **Outcome (pin 20260421.0): refuted for the observed scenes.** The non-water mask compares **TOA** `rhot_1614` > threshold (`acolite_flags.py:63-75`), so glint correction cannot change it. Bit 0 covers 98.9 % (A, 2026-07-02), 99.8 % (D1, 07-05) and 100 % (B/C, 09-13) of the grid. Scene A open-water `rhot_1614` p10/p50 = 0.054/0.058. `flags == 0` = 1.06 % (A). Where bit 0 is set without high-TOA (80 % of A), `TUR`, `SPM`, `rhow`, `Rrs` and `chl_re_gons740` hold the NetCDF fill value `9.969e36`, i.e. **ACOLITE already masked them**; `fai`/`fait`/`ndvi` are populated. Scene geometry: sza ≈ 20–23°, vza ≈ 3°, specular angle ≈ 18–24°, so strong sun glint near nadir in summer is the likely cause (inferred, not yet isolated). **Decision required before Phase 1 closes** (see PLAN Phase 1 halt note). **2026-09-14: user authorized testing option A** (residual glint correction + `l2w_mask_water_parameters=False`, OCEANOS land/cloud masking) via Runs F/G; the remedy is not yet adopted. | Q7, Q13, DA-2, OD5 |
+| **V8** | **NEW, blocking (found 2026-09-14 while resolving the usable-fixture contradiction).** Does the pinned settings set (`l2w_mask_threshold=0.05`, glint correction off per Q13) leave usable water pixels over La Parguera? | Product premise (M2, R-7), Q7 threshold, Q13, DA-2 glint gate, OD5 season | **Outcome (pin 20260421.0): refuted for the observed scenes.** The non-water mask compares **TOA** `rhot_1614` > threshold (`acolite_flags.py:63-75`), so glint correction cannot change it. Bit 0 covers 98.9 % (A, 2026-07-02), 99.8 % (D1, 07-05) and 100 % (B/C, 09-13) of the grid. Scene A open-water `rhot_1614` p10/p50 = 0.054/0.058. `flags == 0` = 1.06 % (A). Where bit 0 is set without high-TOA (80 % of A), `TUR`, `SPM`, `rhow`, `Rrs` and `chl_re_gons740` hold the NetCDF fill value `9.969e36`, i.e. **ACOLITE already masked them**; `fai`/`fait`/`ndvi` are populated. Scene geometry: sza ≈ 20–23°, vza ≈ 3°, specular angle ≈ 18–24°, so strong sun glint near nadir in summer is the likely cause (inferred, not yet isolated). **Decision required before Phase 1 closes** (see PLAN Phase 1 halt note). **2026-09-14: user authorized testing option A** (residual glint correction + `l2w_mask_water_parameters=False`, OCEANOS land/cloud masking) via Runs F/G; both runs are complete. **Resolved 2026-09-14 (user "sí"): option A adopted.** Q13 amended (residual glint correction on); `l2w_mask_water_parameters=False`; bit 0 informational only; DA-2 predicate amended; OD5 unchanged; fixtures from Run F + re-runs D2/B2 (PLAN Phase 1). | Q7, Q13, DA-2, OD5 |
 | **V5-addendum** | Fill values | Conformance | Rasterio reads the NetCDF `_FillValue` `9.969e36` as a **finite** number unless masked explicitly. Conform must honour `_FillValue` → NaN. | Phase 2.3 |
 
 Additional Phase 1 evidence at pin `20260421.0`:
@@ -316,6 +316,43 @@ Additional Phase 1 evidence at pin `20260421.0`:
   `0.989718872`, `0`, `0.002169579`, `0.000003823`, `0`, `0` and `0` of the water pixels.
 - Run A includes `acolite_run_att-20260914T221929Z-spike0001_l2r_settings.txt`; its resolved
   exponents are SWIR=0, cirrus=1, TOA=2, negative=3, out-of-scene=4, mixed=5 and DEM shadow=6.
+
+V8 remedy evidence (Runs F/G, 2026-09-14, pin `20260421.0`):
+
+- Run F used scene A with `l2w_mask_threshold=0.05`, residual glint correction enabled with
+  method `default` and wave range 1500–2400 nm, and `l2w_mask_water_parameters=False`. The resolved
+  tag defaults are `glint_mask_rhos_wave=1600` and `glint_mask_rhos_threshold=0.05`; the run log
+  records `Starting glint correction`. It exited 0 in 5:39.97 with peak RSS 1,761,528 KiB.
+- The denominator is 962,568 GSHHG-water pixels outside the 150 m land buffer. Before the
+  product-finite test, 766,621 pixels pass bits 1/2/3. Candidate-valid fractions are
+  `0.796433083` for every `Rrs_*`, `rhow_*` and `rhorc_*` band and for `fai`, `fait` and `ndvi`;
+  `0.787873688` for `TUR_Nechad2016_665` and `SPM_Nechad2016_665`; and `0.522220768` for
+  `chl_re_gons740`.
+- Over the 8,351 water pixels where A and F are both defined, `rhow_1614` median/p90 changes from
+  `0.031107130`/`0.042165361` (A) to `0`/`0.003206320` (F), and `rhow_2202` changes from
+  `0.028668467`/`0.039515093` to `0.000247538`/`0.002765880`.
+- Over A's `flags == 0` water, the `TUR_Nechad2016_665` median changes from `16.679050446` to
+  `3.553226709` (8,333 comparison pixels), and the `rhow_665` median changes from `0.036990281`
+  to `0.009255467` (8,351 pixels). Thus option A materially changes the values even in A's
+  previously unflagged subset; this is evidence for the pending decision, not an adopted remedy.
+- Run F per-bit water coverage for bits 0–6 is respectively `0.991324249`, `0`, `0.000521522`,
+  `0.203045395`, `0`, `0`, `0`. Bit 3 therefore increases by `0.203045395` from Run A, while bit 0
+  is unchanged as expected from its TOA definition.
+- Run G selected the lowest-cloud `19QGV` candidate among 12 scenes in 2026-01-01–2026-02-28:
+  `S2B_MSIL1C_20260106T150719_N0511_R082_T19QGV_20260106T200359.SAFE`, cloud cover
+  `1.526083191496`, catalogue MD5 `bb43672fb494c070ee2dda96e6c9160f`, downloaded SHA-256
+  `766f2c2daff22195bb48ebf9089f68b5db92e4e9c4df47ed138bc176bcb082b3`. It exited 0 in 4:46.47
+  with peak RSS 1,696,812 KiB.
+- Run G has bit 0 water coverage `0.007441552`, `flags == 0` fraction `0.984676407`, and
+  `rhot_1610` p10/p50 `0.001000000`/`0.001500000` over 962,568 water pixels. (`rhot_1610` is the
+  S2B counterpart to S2A's wavelength-suffixed `rhot_1614`.) Its mean geometry is
+  sza/vza/raa `45.014185641`/`3.010486097`/`51.587319350` degrees, with specular angle
+  `43.194411629` degrees; A/F's corresponding values are `19.996142849`/`3.000503680`/
+  `132.543596959`, with specular angle `22.131066354` degrees. This isolates a strong seasonal/
+  geometry association, while the causal interpretation remains an inference.
+- Uncommitted A/F quicklooks and the full machine-readable measurements remain under
+  `.work/oceanos-pr-mvp/spikes/`; shared TUR display percentiles are p02/p98
+  `0.255167649`/`37.498705444`.
 
 **Environment prerequisites found (not design threads, but blocking any run):**
 
@@ -350,6 +387,7 @@ T23 GeoAI ─ independent        T24 test seams ─ confirm before handoff
 | 1 | 2026-09-14 | T1–T26, V1–V7 | **T1–T26, all as recommended** ("acepto todas las recomendaciones") |
 | 2 | 2026-09-14 | T22a–T22f (from failed handoff gate on R1) | **T22a–T22f, all as recommended** ("acepto"); T22b amends the Brief/Q11 |
 | 3 | 2026-09-14 | DA-1…DA-6 (from `/planning:devils-advocate` iteration 1 on PLAN rev 2) | **all as recommended** ("acepto todo"); DA-1 amends Q7 and adds a T5 exception |
+| 4 | 2026-09-14 | V8 remedy (Runs F/G evidence) | **option A adopted** ("sí"): Q13 amended, bit 0 informational, DA-2 predicate amended, OD5 kept, fixture sources F/D2/B2/E |
 
 ## G. Residuals after round 1
 

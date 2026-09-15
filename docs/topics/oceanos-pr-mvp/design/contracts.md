@@ -176,14 +176,16 @@ through `FakeAcoliteRunner` + `RunVerifier`, without ACOLITE installed.
 | `rhorc_*` inside `l2w_parameters` | sets `output_rhorc`; written to **L2R** (`acolite_run.py:40-43` at the tag) | Q14 |
 | `delete_extracted_input` | `True` | Q10; the extracted SAFE never reaches the archive |
 | `rgb_rhot`, `rgb_rhos` | `False` | not used (T4 builds true colour from L2R) |
-| `l2w_mask_threshold` | `0.05` | Q7 |
+| `l2w_mask_threshold` | `0.05`; bit 0 informational only | Q7 (role amended by V8) |
+| `dsf_residual_glint_correction` | `True` (method `default`, 1500–2400 nm) | Q13 amended (V8) |
+| `l2w_mask_water_parameters` | `False` (ACOLITE never blanks water products; OCEANOS masks) | V8 |
 | ~~land-mask keys~~ | none: ACOLITE does not call `land_water_mask` at the tag; land is masked by OCEANOS `LandMask` at P5 | Q7 amended (DA-1) |
 | `dsf_aot_estimate` | `fixed` | Q9 |
 | `ancillary_type` | `GMAO_IT_MET` / `GMAO_MERRA2_MET` by age | Brief constraint |
 | `l1r_delete_netcdf` | `True` | Q10 |
 | `netcdf_compression` | `True` (proposed; T25) | storage |
 
-Glint correction is left at its default of *off* (Q13) by **not** writing the key.
+~~Glint correction is left at its default of *off* (Q13) by not writing the key.~~ Glint correction is **on** (Q13 amended by V8).
 
 ### 4.2 `run-manifest.json` (P4, archive, authoritative)
 

@@ -63,7 +63,7 @@ its scene, processing version and parameters.
 | Q10 | Discard the SAFE after successful processing; `l1r_delete_netcdf=True`; keep L2R + L2W + manifests indefinitely |
 | Q11 | `merge_tiles=True` with `limit`; no upstream mosaicking |
 | Q12 | Revise the AOI boundary before backfill; fit inside 19QFV if scientifically defensible |
-| Q13 | Sun-glint correction **off**; record the glint angle as metadata |
+| Q13 | ~~Sun-glint correction **off**~~ **Amended 2026-09-14 (V8): residual glint correction ON**; record the glint angle as metadata |
 | Q14 | Request `rhorc_*` so literature-native FAI stays computable without reprocessing |
 | Q15 | Add `version=20260421.0` to the **deployment** `config/config.txt`, and record the git commit SHA in our own run manifest |
 
@@ -175,6 +175,28 @@ resolved. The Brief is complete.*
     "turbid water never classified as land by a reflectance threshold" are unchanged.
   - **Published values.** Published water-product values equal ACOLITE's except on masked land.
   - Detail: `design/design-threads.md` §I.
+- **Amendment 2026-09-14 — Q13 and the role of Q7's SWIR threshold are amended** (V8, user-confirmed).
+  - **Evidence** (`design/design-threads.md` V8 rows; `.work/oceanos-pr-mvp/spikes/v8_measurements.json`).
+    - With the pinned settings, ACOLITE's TOA SWIR non-water flag (bit 0) covered ~99 % of the water
+      on the observed summer scenes, and blanked the water products.
+    - Run F (residual glint correction + `l2w_mask_water_parameters=False`) brought `rhow_1614` over
+      water from median 0.031 to 0.000, and left 79.6 % of the water valid under the new predicate.
+    - Run G (2026-01-06, sun zenith 45°) had bit 0 on 0.7 % with the old settings, confirming
+      summer glint as the cause.
+  - **New rules.**
+    - `dsf_residual_glint_correction=True` (method `default`, 1500–2400 nm).
+    - `l2w_mask_water_parameters=False`.
+    - `l2w_mask_threshold` stays `0.05`, but **bit 0 is informational only**. It never excludes a
+      pixel and never blanks a product.
+    - Land stays OCEANOS's `LandMask` (DA-1). Cloud comes from cirrus + high-TOA flags (dilated).
+  - **Valid pixel (DA-2, amended):** GSHHG water outside the coastal buffer (and the per-product
+    shallow exclusion from Phase 3) ∧ cirrus, high-TOA and negative-rhos flags == 0 (bit names from
+    `FlagSpec`) ∧ cloud flags dilated by `cloud_dilation_px` ∧ product finite (`_FillValue` → NaN).
+  - **Recorded risks, reviewed at the DA-6 gate:**
+    - Run F raised negative-rhos (bit 3) coverage by 20 percentage points of the water.
+    - It shows speckled high turbidity offshore in the south-east, likely residual glint or wave
+      facets.
+  - **OD5 unchanged.** The backfill stays 2026-06-01 → 2026-08-31.
 
 ## Plan
 
@@ -455,12 +477,24 @@ that T24 requires.
     the documented alternative is `ancillary_data=False` + `s2_auxiliary_default=True` (ECMWF data
     inside the SAFE).
   - Scene A's two downloads have different SHA-256 → halt; reopen D-3 (re-acquisition identity).
-  - **ACTIVE HALT (2026-09-14): V8.** The SWIR non-water flag masks ~99 % of the AOI on every
-    observed scene, and ACOLITE blanks the water products there. The "usable fixture" contradiction
-    is a symptom, not the cause. Do **not** pick another scene to work around it. Phase 1 stays
-    `[DOING]` until the user decides the V8 remedy (glint handling / mask threshold / season), which
-    may amend Q7's threshold and Q13.
-- [ ] **V8 remedy spike, authorized by the user 2026-09-14 ("opción A autorizada").** No new
+  - ~~ACTIVE HALT (2026-09-14): V8~~ **Resolved 2026-09-14 by user decision.** See the Q13/Q7
+    amendment under "Resolved after lock". The V8 remedy spike below is done.
+- [ ] **Fixtures after V8 (binding, supersedes the fixture sources above).** Every ACOLITE-derived
+  fixture comes from the **amended settings**: glint correction on, `l2w_mask_water_parameters=False`,
+  `l2w_mask_threshold=0.05`, everything else as Run A. No new downloads; the SAFEs are in
+  `.work/oceanos-pr-mvp/spikes/safe/`.
+  - `success/` (usable): **Run F** (scene A).
+  - `cloudy/`: **Run D2**, scene D1 (`S2B … 20260705 …`) re-run with the amended settings. Its valid
+    fraction under the amended predicate must lie in (0, 0.20).
+  - `ancillary_fallback/`: **Run B2**, scene B re-run with the amended settings and
+    `GMAO_MERRA2_MET`. Its L2R attributes must still equal the defaults.
+  - `skipped/`: **Run E**, unchanged (a skip does not depend on these settings).
+  - `missing_variable/`: derived from Run F.
+  - The usable window must satisfy the geometric criterion **and** a per-product valid fraction
+    ≥ 0.20 under the amended predicate. Bathymetry is still excluded here (Phase 3 re-check).
+  - Runs A/A′/D1/B keep their evidence value but are **not** fixture sources.
+  - Record Runs D2/B2 (settings, exit, time, RSS) in `design-threads.md` V8 evidence.
+- [x] **V8 remedy spike, authorized by the user 2026-09-14 ("opción A autorizada").** No new
   downloads for Run F. Outputs go under `.work/oceanos-pr-mvp/spikes/`. Nothing under `src/`,
   `tests/` or the committed fixtures changes until the decision below is recorded.
   - **Run F (option A).** Scene A, same settings as the valid Run A, plus:
@@ -625,7 +659,7 @@ Estimated size: 2 300–2 800 LOC over three sub-phases, one commit each.
   `RunVerifier` and compares variable names, units and `FlagSpec` to the fixtures.
 - [ ] **`oceanos.domain`**:
   - `AcoliteProfile`/`AcoliteProfileId` and `DownstreamProfile`/`DownstreamProfileId` (DA-4);
-  - `OwnedSettings`, which includes `delete_extracted_input=True` and `rgb_rhot/rgb_rhos=False`;
+  - `OwnedSettings`, which includes `delete_extracted_input=True`, `rgb_rhot/rgb_rhos=False`, **`dsf_residual_glint_correction=True`** and **`l2w_mask_water_parameters=False`** (V8);
   - `ProductSpec`/`ProductSet`;
   - `RunKey`/`RunAttemptId`, `RunAttempt`, `RunState`;
   - `AncillaryEvidence`, `AerosolEvidence`.
@@ -750,13 +784,13 @@ Estimated size: 1 200–1 500 LOC.
   - **guard:** if any product's analysis pixels < 10 000 for the AOI, stop with a user gate
     (the shelf may be too shallow for that product) rather than dividing by ~0.
 - [ ] **`processing/quality.py`, a pure core (DA-2):**
-  - the valid-pixel predicate, with cloud/toa/swir flags dilated by `cloud_dilation_px`;
+  - the valid-pixel predicate **as amended by V8**: cirrus, high-TOA and negative-rhos flags == 0, with the cloud flags (cirrus, high-TOA) dilated by `cloud_dilation_px`; **bit 0 (SWIR threshold) is recorded but never excludes**; product finite with `_FillValue` → NaN;
   - `FlagStatistics`, `RangeViolation`, `QualityReport`;
   - gates, applied in order:
     1. ancillary fallback;
     2. `grid_coverage_fraction < min_grid_coverage` → `incomplete_coverage`;
     3. AOT550 / aerosol model outside bounds;
-    4. glint angle below `glint_angle_min_deg`. **OCEANOS computes it** from the L2R scene-mean `sza`/`vza`/`raa` with the standard specular geometry, recorded in provenance as an OCEANOS derivation (geometry, not an ACOLITE algorithm; B3);
+    4. **residual-glint gates (V8):** the negative-rhos (bit 3) fraction above `max_negative_rhos_fraction`, and the water `rhow_1614` p90 above `max_residual_swir_rhow`, both reported in `quality.json`. The glint angle is **recorded only** (not a rejection gate) because glint is now corrected. **OCEANOS computes it** from the L2R scene-mean `sza`/`vza`/`raa` with the standard specular geometry, recorded in provenance as an OCEANOS derivation (geometry, not an ACOLITE algorithm; B3);
     5. range rules;
     6. `valid_fraction` < 0.20, computed **per product** over that product's analysis pixels (B7).
   - Initial numeric values are set from Phase 1 spike data (scenes A and D), each with its basis
