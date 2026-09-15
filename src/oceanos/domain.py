@@ -40,6 +40,9 @@ RunKey: TypeAlias = Annotated[str, StringConstraints(pattern=r"^run-[0-9a-f]{16}
 RunAttemptId: TypeAlias = Annotated[
     str, StringConstraints(pattern=r"^att-\d{8}T\d{6}Z-[0-9a-f]{8}$")
 ]
+PublicationProfileId: TypeAlias = Annotated[str, StringConstraints(pattern=r"^pub-[0-9a-f]{16}$")]
+ReleaseId: TypeAlias = Annotated[str, StringConstraints(pattern=r"^rel-[0-9a-f]{16}$")]
+Sha256: TypeAlias = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 
 
 def validate_scene_id(value: str) -> str:
@@ -468,3 +471,183 @@ class AcoliteRunOutputs(MetadataModel):
     flag_spec: FlagSpec
     ancillary: AncillaryEvidence
     glint_angle_deg: float | None = None
+
+
+class CoastlineSource(MetadataModel):
+    dataset: str = Field(min_length=1)
+    version: str = Field(min_length=1)
+    sha256: Sha256
+
+
+class LandMask(MetadataModel):
+    """Grid-specific land raster (1 = land) derived once from OCEANOS coastline data."""
+
+    schema_version: str = "1.0"
+    grid_id: GridId
+    version: str = Field(min_length=1)
+    coastline_source: CoastlineSource
+    raster: ArtifactRef
+    land_pixels: int = Field(ge=0)
+
+
+class LandMaskRef(MetadataModel):
+    version: str = Field(min_length=1)
+    sha256: Sha256
+
+
+class LayerSource(MetadataModel):
+    container_role: Literal["l2r", "l2w"]
+    container_sha256: Sha256
+    variable: str = Field(min_length=1)
+
+
+class ConformedLayer(MetadataModel):
+    """One product layer copied onto the delivery grid (P5)."""
+
+    product_key: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
+    kind: Literal["continuous", "binary", "bitfield", "display"]
+    raster: ArtifactRef
+    data_type: Literal["float32", "int32"]
+    nodata: Literal["nan"] | None
+    unit: str | None
+    source: LayerSource
+    grid_id: GridId
+    method: Literal["copy"]
+    grid_coverage_fraction: float = Field(ge=0, le=1)
+    land_mask: LandMaskRef | None
+
+
+class CogProfile(MetadataModel):
+    compress: Literal["DEFLATE"] = "DEFLATE"
+    predictor: Literal[2, 3]
+    overview_resampling: Literal["AVERAGE", "MODE", "NEAREST"]
+    blocksize: int = Field(default=256, ge=64, le=4096)
+    data_type: Literal["float32", "int32"]
+
+
+class PublicationProfile(MetadataModel):
+    schema_version: str = "1.0"
+    version: str = Field(min_length=1)
+    continuous: CogProfile
+    bitfield: CogProfile
+    published_products: tuple[str, ...] = Field(min_length=1)
+
+    @property
+    def profile_id(self) -> str:
+        return _content_id("pub", self.model_dump(mode="json", exclude={"schema_version"}))
+
+
+def release_id(attempt_id: str, downstream_profile_id: str) -> str:
+    """Derive publication identity from one attempt and one downstream profile."""
+    return _content_id("rel", {"attempt_id": attempt_id, "downstream_profile_id": downstream_profile_id})
+
+
+class PublishedAsset(MetadataModel):
+    product_key: str = Field(min_length=1)
+    href: str = Field(min_length=1)
+    sha256: Sha256
+    size: int = Field(ge=0)
+    media_type: str = Field(min_length=1)
+    roles: tuple[str, ...] = Field(min_length=1)
+    unit: str | None = None
+    nodata: Literal["nan"] | None = None
+    data_type: Literal["float32", "int32", "uint8"] | None = None
+    overview_resampling: Literal["AVERAGE", "MODE", "NEAREST"] | None = None
+    center_wavelength_nm: float | None = Field(default=None, gt=0)
+
+    @field_validator("href")
+    @classmethod
+    def release_relative_href(cls, value: str) -> str:
+        path = PurePosixPath(value)
+        if path.is_absolute() or len(path.parts) != 1:
+            raise ValueError("asset href must be a file name inside the release directory")
+        return value
+
+
+class Release(MetadataModel):
+    schema_version: str = "1.0"
+    release_id: ReleaseId
+    observation_id: str = Field(min_length=1)
+    attempt_id: RunAttemptId
+    run_key: RunKey
+    downstream_profile_id: DownstreamProfileId
+    tier: AncillaryTier
+    visibility: Literal["public", "restricted"]
+    assets: tuple[PublishedAsset, ...] = Field(min_length=1)
+    quality: ArtifactRef | None
+    provenance: ArtifactRef
+    supersedes: ReleaseId | None
+    created_at: AwareDatetime
+
+    @field_validator("created_at")
+    @classmethod
+    def utc_created_at(cls, value: datetime) -> datetime:
+        return value.astimezone(UTC)
+
+
+class ProvenanceScene(MetadataModel):
+    scene_id: SceneId
+    source_id: str = Field(min_length=1)
+    sha256: Sha256
+    processing_baseline: str | None
+    platform: str | None
+
+
+class ProvenanceAcolite(MetadataModel):
+    release_tag: str
+    commit_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+    version_attribute: str
+    settings_user_sha256: Sha256
+    settings_resolved_sha256: Sha256
+
+
+class ProvenanceOceanos(MetadataModel):
+    version: str = Field(min_length=1)
+    git_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+    acolite_profile_id: AcoliteProfileId
+    downstream_profile_id: DownstreamProfileId
+    publication_profile_id: PublicationProfileId
+    product_set_version: str = Field(min_length=1)
+    quality_policy_version: str = Field(min_length=1)
+
+
+class ProvenanceAncillary(MetadataModel):
+    type: str
+    tier: AncillaryTier
+    uoz: float
+    uwv: float
+    pressure: float
+
+
+class ProvenanceProduct(MetadataModel):
+    product_key: str
+    acolite_variable: str
+    unit: str | None
+    s2_calibrated: bool
+    caveat: str | None
+    source_sha256: Sha256
+    grid_coverage_fraction: float = Field(ge=0, le=1)
+    land_mask: LandMaskRef | None
+
+
+class ProvenanceTimestamps(MetadataModel):
+    acquired: AwareDatetime | None
+    archived: AwareDatetime
+    published: AwareDatetime
+
+
+class ProvenanceRecord(MetadataModel):
+    """Minimal self-contained lineage for one release (contracts §5)."""
+
+    schema_version: str = "1.0"
+    observation_id: str
+    release_id: ReleaseId
+    attempt_id: RunAttemptId
+    run_key: RunKey
+    scenes: tuple[ProvenanceScene, ...] = Field(min_length=1)
+    acolite: ProvenanceAcolite
+    oceanos: ProvenanceOceanos
+    ancillary: ProvenanceAncillary
+    glint_angle_deg: float | None
+    products: tuple[ProvenanceProduct, ...] = Field(min_length=1)
+    timestamps: ProvenanceTimestamps

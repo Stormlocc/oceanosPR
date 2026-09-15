@@ -539,7 +539,7 @@ that T24 requires.
 - `ls -d tests/fixtures/acolite/{skipped,ancillary_fallback,missing_variable,cloudy}` exits 0.
 - `test "$(du -sb tests/fixtures/acolite | cut -f1)" -lt 10000000` exits 0.
 
-### Phase 2: Tracer bullet — one observation end to end [TODO]
+### Phase 2: Tracer bullet — one observation end to end [DONE]
 
 Review: architecture
 
@@ -693,12 +693,12 @@ Estimated size: 2 300–2 800 LOC over three sub-phases, one commit each.
 - `uv run pytest -q tests/test_architecture.py` exits 0, now covering `acolite`.
 - Full suite + ruff (baseline).
 
-#### Phase 2.3: Conformance, minimal release, runtime probe [TODO]
+#### Phase 2.3: Conformance, minimal release, runtime probe [DONE]
 
-- [ ] **Pre-flight consumer check (first item).** Consumers of `normalize_band` (only
+- [x] **Pre-flight consumer check (first item).** Consumers of `normalize_band` (only
   `tests/test_normalize.py` after 2.1) and of `build_grid` (tests; `normalize_scene` is gone).
   Record the result.
-- [ ] **`processing/normalize.py` conform:**
+- [x] **`processing/normalize.py` conform:**
   - `normalize_band` accepts a `NETCDF:"…":var` source and `int32` categorical input;
   - window copy when the output is phase-aligned, `grid.misaligned` otherwise;
   - partial extent handled per `contracts.md` P5 (NaN / the out-of-scene flag value taken from
@@ -708,14 +708,14 @@ Estimated size: 2 300–2 800 LOC over three sub-phases, one commit each.
     provenance records `land_mask` version + sha256 per product;
   - `assert_aligned` on every layer;
   - the `catalog`/`ingestion` imports are removed.
-- [ ] **`oceanos.publishing`:**
+- [x] **`oceanos.publishing`:**
   - continuous COG profile (`DEFLATE`, `PREDICTOR=3`);
   - bitfield profile (`DEFLATE`, `PREDICTOR=2`, `OVERVIEW_RESAMPLING=MODE` explicit);
   - `PublicationProfile` v0, `PublicationProfileId`, `ReleaseId` (finding 5);
   - release dir, `release.json`, minimal `provenance.json`;
   - derived STAC Item per `contracts.md` §4.4;
   - STAC validation uses **schemas vendored under `tests/fixtures/stac-schemas/`** (finding 27).
-- [ ] **Release commit (DA-5, DA #8, B1).** The sequence is:
+- [x] **Release commit (DA-5, DA #8, B1).** The sequence is:
   1. rename the new release dir into `data/products/`;
   2. atomically replace the STAC Item;
   3. commit the index transaction (from Phase 4; a no-op before that);
@@ -728,15 +728,15 @@ Estimated size: 2 300–2 800 LOC over three sub-phases, one commit each.
   A reconciliation step runs at the start of every mutating command **and at API start-up
   (read-only report + refusal to start on a broken state)**. `tests/test_publish_rollback.py`
   injects a crash after each of steps 1–3.
-- [ ] **`pipeline/run_one.py` + CLI `pipeline run-one --overpass ID [--force-reprocess]`.** The AOI comes from config.
+- [x] **`pipeline/run_one.py` + CLI `pipeline run-one --overpass ID [--force-reprocess]`.** The AOI comes from config.
   It chains A1 selection → A2 → P1–P8 under `WriterLock`. It requires a prior `grid build` and
   `scenes search` covering the overpass, and errors otherwise (house pattern §3.3).
-- [ ] **`scripts/verify_release.py RELEASE_DIR`.** It checks:
+- [x] **`scripts/verify_release.py RELEASE_DIR`.** It checks:
   - every `.tif` is tiled and has ≥ 1 overview;
   - `l2_flags` overview values are a subset of the full-resolution value set;
   - every asset's sha256 matches `release.json`;
   - the STAC Item validates against the vendored schemas.
-- [ ] **CLI `pipeline latest-release --overpass ID`** prints the current release dir, read from the
+- [x] **CLI `pipeline latest-release --overpass ID`** prints the current release dir, read from the
   derived STAC Item. It is needed for non-ambiguous probes (finding 11).
 
 **Sanity Check:**

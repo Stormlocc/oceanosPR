@@ -1,4 +1,4 @@
-"""Spatial band normalization, without scientific index calculation."""
+"""Delivery grid, conformance and masks, without scientific index calculation."""
 
 from oceanos.processing.grid import (
     DeliveryGrid,
@@ -7,12 +7,14 @@ from oceanos.processing.grid import (
     build_grid,
 )
 from oceanos.processing.normalize import (
+    ConformError,
     NormalizationError,
     assert_aligned,
+    conform_layer,
     normalize_band,
 )
 
 __all__ = [
-    "DeliveryGrid", "GridSpec", "NormalizationError", "assert_aligned",
-    "build_delivery_grid", "build_grid", "normalize_band",
+    "ConformError", "DeliveryGrid", "GridSpec", "NormalizationError", "assert_aligned",
+    "build_delivery_grid", "build_grid", "conform_layer", "normalize_band",
 ]

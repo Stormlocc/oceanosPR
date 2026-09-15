@@ -13,13 +13,17 @@ from oceanos.domain import OwnedSettings
 
 
 class _GridSpec(Protocol):
-    crs: object
-    resolution: float
-    bounds: tuple[float, float, float, float]
+    @property
+    def crs(self) -> object: ...
+    @property
+    def resolution(self) -> float: ...
+    @property
+    def bounds(self) -> tuple[float, float, float, float]: ...
 
 
 class _DeliveryGrid(Protocol):
-    spec: _GridSpec
+    @property
+    def spec(self) -> _GridSpec: ...
 
 
 def _format(value: object) -> str:

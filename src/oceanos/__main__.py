@@ -1,4 +1,4 @@
-"""Command-line wiring for AOI, grid, CDSE discovery, and SAFE acquisition."""
+"""Command-line wiring for AOI, grid, CDSE discovery, SAFE acquisition and one-observation runs."""
 
 from __future__ import annotations
 
@@ -17,7 +17,12 @@ from oceanos.catalog import (
     SceneProviderError,
     SceneSearchResult,
 )
-from oceanos.config import ConfigurationError, load_config
+from oceanos.config import (
+    ConfigurationError,
+    load_acolite_parameter_set,
+    load_config,
+    load_product_set,
+)
 from oceanos.ingestion import AcquisitionError, acquire_scene
 from oceanos.ingestion.cdse_auth import CdseTokenClient
 from oceanos.pipeline.plan import (
@@ -26,14 +31,21 @@ from oceanos.pipeline.plan import (
     group_overpasses,
     select_minimal_cover_with_scenes,
 )
+from oceanos.pipeline.run_one import (
+    PipelineError,
+    check_releases,
+    latest_release_dir,
+    run_one,
+)
 from oceanos.processing.grid import DeliveryGrid, build_delivery_grid
-from oceanos.storage import StorageLayout
+from oceanos.publishing import ReconcileError
+from oceanos.storage import StorageLayout, WriterLockedError
 
 L1C_COLLECTION = "sentinel-2-l1c"
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the Phase 2.1 command parser."""
+    """Build the command parser."""
     parser = argparse.ArgumentParser(
         prog="python -m oceanos",
         description="NASA OCEANOS Puerto Rico project CLI.",
@@ -74,6 +86,16 @@ def build_parser() -> argparse.ArgumentParser:
     overpasses.add_argument("--count", action="store_true")
     overpasses.add_argument("--config", type=Path, default=Path("configs/mvp.yaml"))
     overpasses.add_argument("--catalog-dir", type=Path)
+
+    pipeline = commands.add_parser("pipeline", help="Process and publish observations")
+    pipeline_commands = pipeline.add_subparsers(dest="pipeline_command", required=True)
+    run = pipeline_commands.add_parser("run-one", help="Acquire, process and publish one overpass")
+    run.add_argument("--overpass", required=True)
+    run.add_argument("--force-reprocess", action="store_true")
+    run.add_argument("--config", type=Path, default=Path("configs/mvp.yaml"))
+    latest = pipeline_commands.add_parser("latest-release", help="Print the current release directory")
+    latest.add_argument("--overpass", required=True)
+    latest.add_argument("--config", type=Path, default=Path("configs/mvp.yaml"))
 
     catalog = commands.add_parser("catalog", help="Maintain the local scene catalog")
     catalog_commands = catalog.add_subparsers(dest="catalog_command", required=True)
@@ -149,6 +171,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print("Validation: valid")
         elif args.command == "grid":
             settings = load_config(args.config)
+            check_releases(settings)
             aoi = load_aoi(settings.aoi.path, name=settings.aoi.name, target_crs=settings.aoi.target_crs)
             grid = build_delivery_grid(aoi)
             path = _layout(settings).grid_json(aoi.aoi_id)
@@ -156,6 +179,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"Grid: {grid.grid_id}; {grid.spec.width} x {grid.spec.height}; {path}")
         elif args.command == "scenes" and args.scenes_command == "search":
             settings = load_config(args.config)
+            check_releases(settings)
             aoi = load_aoi(settings.aoi.path, name=settings.aoi.name, target_crs=settings.aoi.target_crs)
             discovery = settings.scenes
             provider = CdseODataProvider(
@@ -185,6 +209,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print("\n".join(overpasses))
         elif args.command == "scenes" and args.scenes_command == "acquire":
             settings = load_config(args.config)
+            check_releases(settings)
             catalog = _catalog(settings, args.catalog_dir)
             groups = group_overpasses(catalog.search_local_catalog(collection=L1C_COLLECTION))
             if args.overpass not in groups:
@@ -204,8 +229,22 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print(f"Acquired: {scene.scene_id}; {manifest.acquired.archive.relpath}")
             selected_input = build_input_set(args.overpass, acquired, coverage)
             print(f"Input set: {selected_input.input_set_id}; scenes: {len(selected_input.scenes)}")
+        elif args.command == "pipeline" and args.pipeline_command == "run-one":
+            settings = load_config(args.config)
+            parameters = load_acolite_parameter_set(args.config.parent / "acolite_parameters.yaml")
+            products = load_product_set(args.config.parent / "products.yaml", parameters)
+            result = run_one(
+                settings, args.overpass, parameters=parameters, products=products,
+                force_reprocess=args.force_reprocess,
+            )
+            print(f"{result.status.capitalize()}: {result.release_id}; run key: {result.run_key}; {result.release_dir}")
+        elif args.command == "pipeline" and args.pipeline_command == "latest-release":
+            settings = load_config(args.config)
+            print(latest_release_dir(settings, args.overpass))
         elif args.command == "catalog":
             settings = load_config(args.config)
+            if args.catalog_command == "add":
+                check_releases(settings)
             catalog = _catalog(settings, args.catalog_dir)
             if args.catalog_command == "add":
                 result = SceneSearchResult.model_validate_json(args.scenes_file.read_text(encoding="utf-8"))
@@ -213,7 +252,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print(f"Added: {inserted}; already present: {len(result.scenes) - inserted}")
             else:
                 _print_scenes(catalog.search_local_catalog())
-    except (AcquisitionError, AOIError, ConfigurationError, LocalCatalogError, SceneProviderError, SelectionError, OSError, ValueError) as exc:
+    except (
+        AcquisitionError, AOIError, ConfigurationError, LocalCatalogError, PipelineError, ReconcileError,
+        SceneProviderError, SelectionError, WriterLockedError, OSError, ValueError,
+    ) as exc:
         parser.exit(1, f"Error: {exc}\n")
     return 0
 

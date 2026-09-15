@@ -1,8 +1,9 @@
 # OCEANOS Puerto Rico
 
 OCEANOS PR prepara productos costeros Sentinel-2 para el área de La Parguera. La implementación
-actual cubre el entorno ACOLITE verificado y las etapas A0–A2: descubrimiento L1C, selección de
-cobertura y adquisición íntegra de productos SAFE.
+actual publica una observación de extremo a extremo: descubrimiento L1C, selección de cobertura,
+adquisición íntegra del SAFE, ACOLITE verificado, archivo, conformidad a la grilla de entrega y una
+release inmutable con STAC derivado. La política de calidad aún no existe (Fase 3).
 
 ## Área de interés y grilla de entrega
 
@@ -152,6 +153,51 @@ sobre la escena A es opt-in:
 ```bash
 uv run pytest --run-acolite -q tests/acolite_golden
 ```
+
+## Fase 2.3: conformidad, release mínima y probe real
+
+Una observación (AOI × overpass) se procesa y publica con:
+
+```bash
+uv run oceanospr grid build
+uv run oceanospr scenes search --start 2026-07-02 --end 2026-07-03
+uv run oceanospr pipeline run-one --overpass S2A_20260702T150741_R082 [--force-reprocess]
+uv run oceanospr pipeline latest-release --overpass S2A_20260702T150741_R082
+```
+
+`run-one` exige una grilla y una búsqueda previas; nunca las crea. Selecciona y adquiere el SAFE,
+calcula el `RunKey` y, bajo el `WriterLock`, ejecuta P1–P8. Si el `RunKey` ya está publicado lo omite,
+salvo con `--force-reprocess`, que crea un intento nuevo con el mismo `RunKey`.
+
+- **Conformidad (P5).** `processing/normalize.py` copia cada variable del NetCDF archivado a la
+  grilla sin remuestrear: exige el mismo CRS, 10 m y alineación de fase, o falla con
+  `grid.misaligned`; sin intersección falla con `grid.no_intersection`. Fuera de la extensión de
+  ACOLITE los productos continuos quedan en NaN y `l2_flags` recibe el bit *out of scene* tomado del
+  `FlagSpec`; se registra `grid_coverage_fraction`.
+- **Máscara de tierra (DA-1).** `processing/masks.py` rasteriza GSHHG una vez por grilla en
+  `products/<aoi>/grid/land_mask.tif` (centro de píxel en tierra) con su `land_mask.json`. Los
+  productos de agua quedan NaN en tierra; `l2_flags` nunca se enmascara.
+- **Publicación.** Los COG continuos usan `DEFLATE` + `PREDICTOR=3` y overviews `AVERAGE`; `l2_flags`
+  usa `PREDICTOR=2` y overviews `MODE`. Siempre hay al menos una overview. La release
+  `products/<aoi>/releases/<overpass>/<release_id>/` contiene `tur_nechad2016.tif`, `l2_flags.tif`,
+  `settings_resolved.txt`, `provenance.json` y `release.json` con el SHA-256 de cada activo.
+- **STAC derivado.** `products/<aoi>/stac/items/<overpass>.json` (STAC 1.1.0 con extensiones
+  processing, classification y eo) apunta siempre a la release actual, con rutas relativas.
+- **Commit de release.** Orden: renombrar la release nueva, reemplazar el Item, transacción de
+  índice (Fase 4) y solo al final mover la anterior a `superseded/` con un evento en
+  `state/ledger/releases.jsonl`. La reconciliación repara un corte en cualquier paso al inicio de
+  `run-one`; el resto de comandos mutantes y `latest-release` la ejecutan en solo lectura y se niegan
+  a continuar si un Item apunta a una release inexistente.
+- **Veredicto.** En esta fase es fijo `usable`; la política de calidad llega en la Fase 3.
+
+Verificación de una release y probe real (requiere red, CDSE, EarthData y ACOLITE fijado):
+
+```bash
+uv run python scripts/verify_release.py "$(uv run oceanospr pipeline latest-release --overpass S2A_20260702T150741_R082)"
+scripts/probe_run_one.sh
+```
+
+Los esquemas STAC usados para validar están vendorizados en `tests/fixtures/stac-schemas/`.
 
 La prueba del catálogo CDSE real es opt-in:
 
