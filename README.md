@@ -108,6 +108,51 @@ uv run pytest -q
 uv run ruff check src tests
 ```
 
+## Fase 2.2: adaptador ACOLITE, verificación y archivo
+
+`oceanos.acolite` ejecuta el ACOLITE fijado como subproceso y concentra todo su vocabulario:
+
+- `InstallationProbe` comprueba sin importar ACOLITE el commit, la línea `version=`, los LUT de
+  S2A/S2B/S2C, GSHHG, la entrada `earthdata` de `~/.netrc` y el disco libre.
+- `SettingsRenderer` escribe solo las claves propiedad de OCEANOS más `inputfile`, `output` y
+  `runid`. El `limit` es la grilla de entrega en EPSG:4326 ampliada un píxel y debe coincidir con
+  el del perfil; `merge_tiles` solo aparece con más de una tesela.
+- `SubprocessAcoliteRunner` lanza ACOLITE en su propio grupo de procesos, registra
+  pid/pgid/cmdline del hijo en el lock y aplica el timeout configurado.
+- `RunVerifier` nunca confía en el código de salida (ACOLITE sale con 0 al fallar): exige un único
+  L2R, L2W y archivo de settings de cada tipo, busca mensajes de omisión en el log, valida
+  `acolite_version`, variables pedidas (`rhorc_*` en L2R), unidades, ancilares por defecto y
+  construye el `FlagSpec` desde los settings resueltos.
+
+La identidad de procesamiento es `AcoliteProfile` → `RunKey`; la lista de `l2w_parameters` vive
+solo en `configs/acolite_parameters.yaml` y `configs/products.yaml` únicamente selecciona de ella
+lo que se publicará (v0: `tur_nechad2016` y `l2_flags`).
+
+`pipeline/archive.py` copia atómicamente al tier `archive` solo la lista permitida (`*_L2R.nc`,
+`*_L2W.nc`, `run.log`, `l1r_settings_user.txt`, `l2r_settings.txt`) junto a `run-manifest.json`.
+Cada transición de intento se agrega con `fsync` a `state/ledger/attempts.jsonl`. Un lock libre con
+intento no terminal se marca `abandoned`; su grupo de procesos solo se termina si coinciden
+`boot_id`, tiempo de inicio y cmdline de `launch_acolite.py`.
+
+```yaml
+acolite:
+  python_executable: "~/micromamba/envs/acolite/bin/python"
+  launcher: "launch_acolite.py"
+  root: "~/acolite"
+  release_tag: "20260421.0"
+  commit_sha: "f73cbe73887c2b114d9d3c70865effee73871525"
+  luts_dir: "~/acolite/data/LUT"
+  external_dir: "data/external"
+  timeout_seconds: 1200
+```
+
+La suite predeterminada usa `FakeAcoliteRunner` con los fixtures de Fase 1. La ejecución real
+sobre la escena A es opt-in:
+
+```bash
+uv run pytest --run-acolite -q tests/acolite_golden
+```
+
 La prueba del catálogo CDSE real es opt-in:
 
 ```bash

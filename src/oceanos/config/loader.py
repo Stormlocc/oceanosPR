@@ -10,6 +10,7 @@ import yaml
 from pydantic import ValidationError
 
 from oceanos.config.models import OceanosSettings
+from oceanos.domain import AcoliteParameterSet, ProductSet
 
 logger = logging.getLogger(__name__)
 
@@ -59,3 +60,42 @@ def load_config(config_path: str | Path, *, base_dir: str | Path | None = None) 
     )
     return resolved
 
+
+def _load_yaml_mapping(path_value: str | Path) -> tuple[Path, dict[str, Any]]:
+    path = Path(path_value).expanduser().resolve()
+    try:
+        with path.open("r", encoding="utf-8") as stream:
+            values: Any = yaml.safe_load(stream)
+    except (OSError, yaml.YAMLError) as exc:
+        raise ConfigurationError(f"Could not read configuration file: {path}") from exc
+    if not isinstance(values, dict):
+        raise ConfigurationError(f"Configuration must contain a YAML mapping: {path}")
+    return path, values
+
+
+def load_acolite_parameter_set(path: str | Path) -> AcoliteParameterSet:
+    """Load the sole versioned source for rendered processing parameters."""
+    resolved, values = _load_yaml_mapping(path)
+    try:
+        return AcoliteParameterSet.model_validate(values)
+    except ValidationError as exc:
+        raise ConfigurationError(f"Invalid configuration in {resolved}: {exc}") from exc
+
+
+def load_product_set(path: str | Path, parameters: AcoliteParameterSet) -> ProductSet:
+    """Load selected publication products and validate their processing source."""
+    resolved, values = _load_yaml_mapping(path)
+    try:
+        products = ProductSet.model_validate(values)
+    except ValidationError as exc:
+        raise ConfigurationError(f"Invalid configuration in {resolved}: {exc}") from exc
+    allowed = set(parameters.parameters)
+    outside = sorted({
+        spec.acolite_parameter for spec in products.specs
+        if spec.acolite_parameter is not None and spec.acolite_parameter not in allowed
+    })
+    if outside:
+        raise ConfigurationError(
+            f"ProductSpec acolite_parameter outside AcoliteParameterSet: {outside}"
+        )
+    return products

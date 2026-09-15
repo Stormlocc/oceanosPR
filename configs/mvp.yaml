@@ -31,3 +31,14 @@ storage:
   state: "state"
   failed_workspace_retention_days: 14
   superseded_releases_to_keep: 1
+
+# ACOLITE is invoked only through its pinned local subprocess installation.
+acolite:
+  python_executable: "~/micromamba/envs/acolite/bin/python"
+  launcher: "launch_acolite.py"
+  root: "~/acolite"
+  release_tag: "20260421.0"
+  commit_sha: "f73cbe73887c2b114d9d3c70865effee73871525"
+  luts_dir: "~/acolite/data/LUT"
+  external_dir: "data/external"
+  timeout_seconds: 1200

@@ -1,0 +1,29 @@
+schema_version: "1.0"
+version: "0"
+specs:
+  - product_key: "tur_nechad2016"
+    acolite_parameter: "tur_nechad2016"
+    variable_pattern: "TUR_Nechad2016_*"
+    kind: "continuous"
+    unit: "FNU"
+    masked_by_acolite: false
+    land_masked: true
+    shallow_exclusion_m: null
+    accepted_range: null
+    display_range: null
+    s2_calibrated: true
+    publish: "cog"
+    caveat: null
+  - product_key: "l2_flags"
+    acolite_parameter: null
+    variable_pattern: "l2_flags"
+    kind: "bitfield"
+    unit: null
+    masked_by_acolite: false
+    land_masked: false
+    shallow_exclusion_m: null
+    accepted_range: null
+    display_range: null
+    s2_calibrated: false
+    publish: "cog"
+    caveat: null

@@ -90,6 +90,28 @@ class StorageSettings(BaseModel):
     superseded_releases_to_keep: int = Field(default=1, ge=0)
 
 
+class AcoliteSettings(BaseModel):
+    """Pinned local subprocess installation and runtime limit."""
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+
+    python_executable: Path
+    launcher: Path
+    root: Path
+    release_tag: str = Field(pattern=r"^\d{8}\.\d+$")
+    commit_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+    luts_dir: Path
+    external_dir: Path
+    timeout_seconds: int = Field(gt=0)
+
+    @field_validator("python_executable", "launcher", "root", "luts_dir", "external_dir", mode="before")
+    @classmethod
+    def nonblank_path(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            raise ValueError("path must not be blank")
+        return value
+
+
 class OceanosSettings(BaseSettings):
     """Validated settings shared by OCEANOS components.
 
@@ -111,6 +133,7 @@ class OceanosSettings(BaseSettings):
     aoi: AOISettings
     scenes: SceneSearchSettings = Field(default_factory=SceneSearchSettings)
     storage: StorageSettings = Field(default_factory=StorageSettings)
+    acolite: AcoliteSettings
 
     @field_validator("project_name", "default_crs")
     @classmethod
@@ -152,6 +175,16 @@ class OceanosSettings(BaseSettings):
                 "storage": self.storage.model_copy(update={
                     field: self._resolve(getattr(self.storage, field), data_root)
                     for field in ("raw", "work", "archive", "products", "superseded", "state")
+                }),
+                "acolite": self.acolite.model_copy(update={
+                    "root": self._resolve(self.acolite.root, resolved_base),
+                    "python_executable": self._resolve(self.acolite.python_executable, resolved_base),
+                    "launcher": self._resolve(
+                        self.acolite.launcher,
+                        self._resolve(self.acolite.root, resolved_base),
+                    ),
+                    "luts_dir": self._resolve(self.acolite.luts_dir, resolved_base),
+                    "external_dir": self._resolve(self.acolite.external_dir, resolved_base),
                 }),
                 "aoi": self.aoi.model_copy(
                     update={"path": self._resolve(self.aoi.path, resolved_base)}

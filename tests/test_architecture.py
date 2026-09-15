@@ -23,6 +23,8 @@ ACOLITE_SETTING_KEYS = (
     "rgb_rhot",
     "rgb_rhos",
     "l2w_mask_threshold",
+    "dsf_residual_glint_correction",
+    "l2w_mask_water_parameters",
     "dsf_aot_estimate",
     "ancillary_type",
     "l1r_delete_netcdf",

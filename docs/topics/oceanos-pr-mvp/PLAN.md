@@ -629,20 +629,20 @@ Estimated size: 2 300–2 800 LOC over three sub-phases, one commit each.
 - `grep -rn "MVP_BANDS\|normalize_scene\|load_materialized_bands" src tests | wc -l` prints `0`.
 - Full suite + ruff (baseline).
 
-#### Phase 2.2: ACOLITE adapter, verification, archive [TODO]
+#### Phase 2.2: ACOLITE adapter, verification, archive [DONE]
 
-- [ ] **`configs/acolite_parameters.yaml` `AcoliteParameterSet` v1 (B4).** The pinned Q4 list
+- [x] **`configs/acolite_parameters.yaml` `AcoliteParameterSet` v1 (B4).** The pinned Q4 list
   (`rhow_*,Rrs_*,rhorc_*,tur_nechad2016,spm_nechad2016,chl_re_gons740,fai,fait,ndvi`) is owned by
   `AcoliteProfile` and is the **only** source of `l2w_parameters`. `ProductSet` may only *select* from
   it; config load rejects a `ProductSpec.acolite_parameter` outside the set. Adding a parameter is
   therefore an `AcoliteProfile` change (new `RunKey`), by design.
-- [ ] **`configs/products.yaml` `ProductSet` v0 (finding 5).**
+- [x] **`configs/products.yaml` `ProductSet` v0 (finding 5).**
   - `tur_nechad2016` (continuous, COG) + `l2_flags` (bitfield, COG).
   - `l2w_parameters` is still rendered from the **full Q4 list**, so ACOLITE outputs match the
     Phase 1 fixtures. v0 only limits what gets *published*.
-- [ ] **Config section `acolite`**: interpreter, launcher, root, pin tag + SHA, LUT dir,
+- [x] **Config section `acolite`**: interpreter, launcher, root, pin tag + SHA, LUT dir,
   `external_dir`, and the timeout from V7 (finding 23).
-- [ ] **`oceanos.acolite`**:
+- [x] **`oceanos.acolite`**:
   - `InstallationProbe`;
   - `SettingsRenderer` (owned keys only; `merge_tiles` only when more than one tile is selected);
   - `SubprocessAcoliteRunner`: own process group, pgid written to the lock holder record, timeout,
@@ -652,30 +652,30 @@ Estimated size: 2 300–2 800 LOC over three sub-phases, one commit each.
   - `FlagSpec` built from the resolved settings;
   - platform × S2 band → variable mapping (T2), tested against all three platform wavelength tables
     in research §4.
-- [ ] **`tests/support/fake_acolite.py` `FakeAcoliteRunner`**, which copies the Phase 1 fixture
+- [x] **`tests/support/fake_acolite.py` `FakeAcoliteRunner`**, which copies the Phase 1 fixture
   variants.
-- [ ] **`conftest.py` `--run-acolite` hook + `tests/acolite_golden/test_golden_run.py` (finding 15).**
+- [x] **`conftest.py` `--run-acolite` hook + `tests/acolite_golden/test_golden_run.py` (finding 15).**
   It is collected only with the flag. It re-runs scene A through `SubprocessAcoliteRunner` +
   `RunVerifier` and compares variable names, units and `FlagSpec` to the fixtures.
-- [ ] **`oceanos.domain`**:
+- [x] **`oceanos.domain`**:
   - `AcoliteProfile`/`AcoliteProfileId` and `DownstreamProfile`/`DownstreamProfileId` (DA-4);
   - `OwnedSettings`, which includes `delete_extracted_input=True`, `rgb_rhot/rgb_rhos=False`, **`dsf_residual_glint_correction=True`** and **`l2w_mask_water_parameters=False`** (V8);
   - `ProductSpec`/`ProductSet`;
   - `RunKey`/`RunAttemptId`, `RunAttempt`, `RunState`;
   - `AncillaryEvidence`, `AerosolEvidence`.
-- [ ] **`RunVerifier` details (DA #10, #18):**
+- [x] **`RunVerifier` details (DA #10, #18):**
   - `rhorc_*` is looked for in **L2R**;
   - `settings_resolved` = `acolite_run_<id>_l2r_settings.txt`, which is also the `FlagSpec` source
     and the Q18 asset;
   - `AerosolEvidence` is read from the L2R attribute names recorded in Phase 1.
-- [ ] **`pipeline/archive.py`**:
+- [x] **`pipeline/archive.py`**:
   - the P4 commit into `data/archive/…` plus `run-manifest.json`;
   - it archives an **explicit allow-list**: `*_L2R.nc`, `*_L2W.nc`, the log,
     `l1r_settings_user.txt`, `l2r_settings.txt`. Anything else stays in the workspace (DA #9).
-- [ ] **Append-only attempts ledger** `data/state/ledger/attempts.jsonl`. Every attempt state
+- [x] **Append-only attempts ledger** `data/state/ledger/attempts.jsonl`. Every attempt state
   transition, including failures before P4, is appended with `fsync`. It is the rebuild source for
   failures (DA #8).
-- [ ] **Stale-lock recovery (DA #7).** When the lock is free but the holder record is non-terminal,
+- [x] **Stale-lock recovery (DA #7).** When the lock is free but the holder record is non-terminal,
   kill the recorded `child_pgid` **only if** `boot_id` matches, `child_start_time` matches and `child_cmdline`
   contains `launch_acolite.py`. Then mark the attempt `abandoned` and clean staging.
 

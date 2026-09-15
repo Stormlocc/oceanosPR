@@ -1,0 +1,12 @@
+schema_version: "1.0"
+version: "1"
+parameters:
+  - "rhow_*"
+  - "Rrs_*"
+  - "rhorc_*"
+  - "tur_nechad2016"
+  - "spm_nechad2016"
+  - "chl_re_gons740"
+  - "fai"
+  - "fait"
+  - "ndvi"
