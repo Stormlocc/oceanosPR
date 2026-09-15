@@ -350,17 +350,30 @@ V8 remedy evidence (Runs F/G, 2026-09-14, pin `20260421.0`):
   `43.194411629` degrees; A/F's corresponding values are `19.996142849`/`3.000503680`/
   `132.543596959`, with specular angle `22.131066354` degrees. This isolates a strong seasonal/
   geometry association, while the causal interpretation remains an inference.
+- Run D2 reprocessed scene D1 with the adopted V8 settings: residual glint correction `True`
+  (`default`, 1500–2400 nm), `l2w_mask_water_parameters=False`, `l2w_mask_threshold=0.05` and
+  `GMAO_MERRA2_MET`. The log records `Starting glint correction`; L2R and L2W are present and the
+  process exited 0 in 5:16.88 with peak RSS 1,760,756 KiB. In the final fixture window its amended
+  `TUR_Nechad2016_665` valid fraction, including the finite-product condition, is `0.050418605`,
+  inside the required open interval `(0, 0.20)`.
+- Run B2 reprocessed scene B with the same adopted settings and `GMAO_MERRA2_MET`. The log records
+  `Starting glint correction`; L2R and L2W are present and the process exited 0 in 5:26.08 with peak
+  RSS 1,789,052 KiB. Its L2R attributes remain exactly the fallback defaults: `uoz=0.3`, `uwv=1.5`,
+  `pressure=1013.25` and `wind=2.0`.
 - Uncommitted A/F quicklooks and the full machine-readable measurements remain under
   `.work/oceanos-pr-mvp/spikes/`; shared TUR display percentiles are p02/p98
   `0.255167649`/`37.498705444`.
 
-**Environment prerequisites found (not design threads, but blocking any run):**
+**Environment prerequisites found and resolved during Phase 1 (historical record):**
 
 - **E1.** `~/acolite` is a shallow clone of `main` at `d61c8de`, not tag `20260421.0` / `f73cbe7`.
-  **Re-clone at the tag.** Verified 2026-09-14.
-- **E2.** `~/acolite/data/LUT` is still empty (SUMMARY §8).
-- **E3.** GSHHG is not downloaded (SUMMARY §8).
-- **E4.** The `version=20260421.0` line (Q15) is not yet added to the deployment `config/config.txt`.
+  **Resolved:** re-cloned at the tag and verified 2026-09-14.
+- **E2.** `~/acolite/data/LUT` was empty (SUMMARY §8). **Resolved:** LUT retrieval and environment
+  check pass.
+- **E3.** GSHHG was not downloaded (SUMMARY §8). **Resolved:** the pinned OCEANOS-owned archive is
+  present and `scripts/fetch_gshhg.sh --check` passes.
+- **E4.** The `version=20260421.0` line (Q15) was absent from deployment `config/config.txt`.
+  **Resolved:** exactly one version line is present.
 
 ---
 

@@ -446,3 +446,52 @@ procesamiento no se importan mutuamente, la API no importa escritores ni
 etapas de procesamiento, el dominio no depende de otros paquetes OCEANOS y el
 vocabulario de ACOLITE queda restringido a su adaptador. La suite predeterminada
 continúa siendo offline.
+
+## Fase 1 del MVP ACOLITE: entorno y fixtures reales
+
+ACOLITE queda fijado en la versión `20260421.0`, commit
+`f73cbe73887c2b114d9d3c70865effee73871525`, y se ejecuta como proceso externo. Los LUT se
+preparan previamente y GSHHG 2.3.7 se mantiene como dato de referencia propiedad de OCEANOS. Las
+credenciales de EarthData y CDSE permanecen exclusivamente en `~/.netrc`.
+
+```bash
+scripts/acolite_env.sh --check
+scripts/fetch_gshhg.sh --check
+```
+
+Los spikes reales confirmaron la grilla UTM de 10 m, la detección del fallback atmosférico, el
+formato de `runid`, los atributos y variables de salida, y el presupuesto de tiempo, memoria y
+almacenamiento. La configuración adoptada activa la corrección residual de glint con método
+`default` y rango 1500–2400 nm, conserva `l2w_mask_threshold=0.05` como indicador de objetivos
+brillantes y establece `l2w_mask_water_parameters=False`. El bit SWIR 0 es informativo; la validez
+excluye los bits de cirrus, high-TOA y rhos negativo, además de valores no finitos.
+
+`scripts/make_acolite_fixtures.py` recorta las corridas verificadas a una ventana real de 256×256.
+El recorte GSHHG conserva un halo métrico de 150 m para que la máscara costera no cambie en los
+bordes. El árbol resultante contiene:
+
+- `success/`: Run F sobre la escena A;
+- `cloudy/`: Run D2, con fracción válida real entre 0 y 20%;
+- `ancillary_fallback/`: Run B2 con los valores atmosféricos por defecto detectables;
+- `missing_variable/`: derivado de Run F sin la variable de turbidez;
+- `skipped/`: el log real de Run E, donde ACOLITE terminó con código 0 sin producir NetCDF.
+
+Los fixtures están en `tests/fixtures/acolite/`, ocupan menos de 10 MB y conservan los settings
+resueltos y logs necesarios para pruebas offline. No contienen SAFEs ni credenciales. El generador
+se niega a sobrescribir un árbol existente; regenera primero en un staging nuevo y compáralo antes
+de reemplazarlo deliberadamente:
+
+```bash
+fixture_staging="$(mktemp -d)"
+~/micromamba/envs/acolite/bin/python scripts/make_acolite_fixtures.py \
+  --run-f .work/oceanos-pr-mvp/spikes/run_f_valid \
+  --run-b2 .work/oceanos-pr-mvp/spikes/run_b2_valid \
+  --run-d2 .work/oceanos-pr-mvp/spikes/run_d2_valid \
+  --run-e .work/oceanos-pr-mvp/spikes/run_e_valid \
+  --gshhg data/external/gshhg/GSHHS_shp/f/GSHHS_f_L1.shp \
+  --output "$fixture_staging/acolite"
+diff -qr tests/fixtures/acolite "$fixture_staging/acolite"
+```
+
+La suite normal usa únicamente estos artefactos recortados y no necesita red ni una instalación de
+ACOLITE.

@@ -3,47 +3,66 @@
 ## Completed boundary
 
 Phase 0, **Branch, hygiene, tooling**, is complete on
-`feat/oceanos-pr-mvp`. The work establishes the local tooling and the
-architecture guardrails that every later MVP phase must retain.
+`feat/oceanos-pr-mvp`. Phase 1, **ACOLITE environment and feasibility spikes**,
+is implemented and verified. Phase 2 has not begun.
 
-## Phase 0 deliverables
+## Phase 1 completed work
 
-- `oceanospr` resolves to `oceanos.__main__:main`.
-- `pandas` is removed; the lockfile no longer resolves it.
-- The development group contains Ruff and mypy. Ruff targets Python 3.11;
-  mypy is strict when invoked against the new packages introduced by later
-  phases.
-- `tests/test_architecture.py` enforces topology rules A1–A4 only. It does
-  not enforce the broader may-import matrix and preserves the temporary
-  `processing/normalize.py` allowance stated in the PLAN.
-- The obsolete ignored `src/nasa_oceanos_pr.egg-info/` output is removed.
-- `.env.example` already documents `~/.netrc` credentials for `earthdata` and
-  `cdse`; no credential material is tracked.
+- ACOLITE is pinned at `20260421.0` / `f73cbe73887c2b114d9d3c70865effee73871525`;
+  its environment and LUT checks pass.
+- GSHHG 2.3.7 full-resolution level-1 land polygons are fetched and verified
+  against the accepted pinned SHA-256.
+- The live discovery, complete SAFE acquisitions and valid A/A′/B/C/D/E/F/G,
+  D2 and B2 runs are retained under `.work/oceanos-pr-mvp/spikes/`.
+- V1–V8 outcomes and supporting measurements are recorded in
+  `design/design-threads.md`.
+- The V8 amendment activates residual glint correction, makes SWIR bit 0
+  informational and defines fixture validity from GSHHG water outside the
+  coastal buffer, bits 1/2/3 and finite product values.
+- `scripts/make_acolite_fixtures.py` generates the offline fixtures from Run F,
+  B2, D2 and E. The committed fixture tree is 9,825,741 bytes.
+
+## V8 fixture resolution
+
+The final 256×256 fixture window starts at row 341, column 251. It contains
+3,434 GSHHG land pixels, 8,352 coastal-buffer pixels and 53,750 water pixels
+outside that buffer. The GSHHG fixture subset retains a 150 m UTM halo so
+rasterized counts at the window edge reproduce `window.json` exactly.
+
+Run F's limiting product is `chl_re_gons740`, with valid fraction
+`0.7559255813953488`; every product therefore exceeds 0.20. Run D2's amended
+`TUR_Nechad2016_665` valid fraction, including finite-product filtering, is
+`0.05041860465116279`, inside the required open interval `(0, 0.20)`. Run B2
+retains the fallback atmospheric attributes exactly.
+
+Bathymetry remains deliberately excluded until the Phase 3 research item and
+fixture re-check. The full Run F archive is retained under `.work/` for that
+possible re-crop.
 
 ## Verification record
 
-Run after the Phase 0 changes:
+Run after the current Phase 1 changes:
 
 ```text
 uv run pytest -q
-uv run ruff check src tests
-uv run oceanospr --help
-test ! -d src/nasa_oceanos_pr.egg-info
-grep -c '"pandas' pyproject.toml
-git branch --show-current
-git ls-files .agents | wc -l
+uv run ruff check src tests scripts/make_acolite_fixtures.py
+scripts/acolite_env.sh --check
+scripts/fetch_gshhg.sh --check
+test "$(du -sb tests/fixtures/acolite | cut -f1)" -lt 10000000
 ```
 
-The default tests remain offline and do not require ACOLITE or network access.
+The last full run reported `155 passed`; Ruff and all Phase 1 direct sanity
+checks passed. The default suite remains offline and does not require ACOLITE
+or network access.
 
 ## Protected workspace state
 
-Do not stage, alter, or discard the existing `.gitignore` newline-only change,
-untracked `AGENTS.md`, or untracked `.agents/` tree. `.agents/` must remain
-untracked through the active PLAN.
+Do not stage, alter or discard `.agents/`; it remains untracked by PLAN rule.
+The untracked `.work/` tree contains the complete real runs and must be retained
+through the Phase 3 fixture re-check.
 
 ## Next authorized unit
 
-Phase 1 is the next unit: establish and verify the pinned ACOLITE environment
-and run the feasibility spikes. Do not begin it until Phase 0's checkpoint is
-reviewed and committed according to the PLAN.
+Phase 2.1, **Domain core, delivery grid, acquisition A0–A2**, is next. Begin with
+its mandatory pre-flight consumer check and do not carry forward the retired
+L2A/loose-band acquisition path.

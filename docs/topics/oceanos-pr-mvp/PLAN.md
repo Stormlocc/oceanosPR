@@ -345,7 +345,7 @@ A small horizontal prerequisite, about 150 LOC.
 - `git branch --show-current` prints `feat/oceanos-pr-mvp`.
 - `git ls-files .agents | wc -l` prints `0`.
 
-### Phase 1: ACOLITE environment and feasibility spikes [DOING]
+### Phase 1: ACOLITE environment and feasibility spikes [DONE]
 
 Resolves V1, V2, V3, V6 and V7 **before** any code depends on them (OD1). Produces the real fixtures
 that T24 requires.
@@ -479,7 +479,7 @@ that T24 requires.
   - Scene A's two downloads have different SHA-256 → halt; reopen D-3 (re-acquisition identity).
   - ~~ACTIVE HALT (2026-09-14): V8~~ **Resolved 2026-09-14 by user decision.** See the Q13/Q7
     amendment under "Resolved after lock". The V8 remedy spike below is done.
-- [ ] **Fixtures after V8 (binding, supersedes the fixture sources above).** Every ACOLITE-derived
+- [x] **Fixtures after V8 (binding, supersedes the fixture sources above).** Every ACOLITE-derived
   fixture comes from the **amended settings**: glint correction on, `l2w_mask_water_parameters=False`,
   `l2w_mask_threshold=0.05`, everything else as Run A. No new downloads; the SAFEs are in
   `.work/oceanos-pr-mvp/spikes/safe/`.
