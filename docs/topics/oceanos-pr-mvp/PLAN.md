@@ -416,6 +416,10 @@ that T24 requires.
 - [ ] **Record outcomes (D-8).** In `design/design-threads.md` §D, append to each V1, V2, V3, V6 and
   V7 row the exact token `**Outcome (pin 20260421.0): verified**` or
   `**Outcome (pin 20260421.0): refuted**`, followed by the evidence:
+  - **V1 scope (clarified 2026-09-14):** the authorized criterion is the **single-tile** run (Run A,
+    no `merge_tiles`), because T22b made single-tile the default and 19QGV covers the AOI. A merge
+    run is **not** required in Phase 1; the merge path stays covered only by fixture-level tests
+    (R-4) and gets its own spike if an AOI ever needs several tiles.
   - **V1:** ACOLITE writes `x`/`y` as pixel **centres**. Verified iff `(x[0] − 5) mod 10 == 0`,
     `(y[0] − 5) mod 10 == 0` and `abs(pixel size) == 10` (y spacing is negative). The centre/edge convention is written down with
     it (DA #16).
@@ -434,7 +438,7 @@ that T24 requires.
     - that `acolite_run_<id>_l2r_settings.txt` exists and carries the `flag_exponent_*` values (DA #10).
 - [ ] **`scripts/make_acolite_fixtures.py`** (committed dev tool). It runs in the ACOLITE env with
   `netCDF4` only; there is no `import acolite`.
-  - Crops Run A's L2R/L2W to a **256×256** window (2.56 km) containing land, the 150 m buffer and ≥ 20 000 water pixels deeper than the initial shallow cut. It also writes a committed GSHHG clip `tests/fixtures/acolite/gshhg_clip.geojson` for that window (B12, B13), **rewriting `x`/`y` coordinates and the extent/limit
+  - Crops Run A's L2R/L2W to a **256×256** window (2.56 km) containing land, the 150 m coastal buffer and **≥ 20 000 GSHHG water pixels outside that buffer**. The criterion is geometric only (clarified 2026-09-14): the shallow cut and the bathymetry dataset are Phase 3 decisions and are **not** applied here. `.work/oceanos-pr-mvp/spikes/run_a/` is kept until Phase 3 so the fixture can be re-cropped. It also writes a committed GSHHG clip `tests/fixtures/acolite/gshhg_clip.geojson` for that window (B12, B13), **rewriting `x`/`y` coordinates and the extent/limit
     attributes**, and keeping every other global and variable attribute.
   - Writes the cropped window's bounds to `tests/fixtures/acolite/window.json`, so the tests can
     build a matching test AOI and grid (finding 7).
@@ -702,6 +706,11 @@ Estimated size: 1 200–1 500 LOC.
     sargassum over the shelf is the target). Initial values come from the research item, with their
     basis;
   - `water_pixels` per product is the `valid_fraction` denominator;
+  - **Fixture re-check (deferred from Phase 1, clarified 2026-09-14).** Once the dataset and the
+    per-product shallow cuts are chosen, verify that the Phase 1 fixture window still has ≥ 20 000
+    analysis pixels for every product with `shallow_exclusion_m` set. If it does not, re-crop from
+    `.work/oceanos-pr-mvp/spikes/run_a/` with `scripts/make_acolite_fixtures.py` before the quality
+    tests are written.
   - **guard:** if any product's analysis pixels < 10 000 for the AOI, stop with a user gate
     (the shelf may be too shallow for that product) rather than dividing by ~0.
 - [ ] **`processing/quality.py`, a pure core (DA-2):**
