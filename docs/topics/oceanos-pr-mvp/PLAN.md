@@ -756,20 +756,21 @@ Estimated size: 2 300–2 800 LOC over three sub-phases, one commit each.
   - the script exits 0.
 - Full suite + ruff (baseline).
 
-### Phase 3: Quality, masks, full product set, provenance [TODO]
+### Phase 3: Quality, masks, full product set, provenance [DONE]
 
 Review: code-design
 
 Estimated size: 1 200–1 500 LOC.
 
-- [ ] **Config sections `quality` (file `configs/quality.yaml`) and `publication`** (finding 23).
-- [ ] **Bathymetry research item (DA-3).** Run `/discovery:research`: public bathymetry for La
+- [x] **Config sections `quality` (file `configs/quality.yaml`) and `publication`** (finding 23).
+- [x] **Bathymetry research item (DA-3).** Run `/discovery:research`: public bathymetry for La
   Parguera/SW Puerto Rico (NOAA NCEI CUDEM / Coastal Relief Model candidates) — resolution, vertical
   datum, licence, coverage of the AOI. Record the chosen dataset and the reason in
   `design/design-threads.md` §I. **User gate** if none is suitable (fallback: per-product caveat).
-- [ ] **`scripts/fetch_bathymetry.sh`** (idempotent, sha256 recorded) into `data/external/bathymetry/`.
-- [ ] **`processing/masks.py` `AnalysisMask`**, built once per grid:
-  - GSHHG coastal buffer `150 m` (D-2: the midpoint of the Brief's 100–200 m);
+- [x] **`scripts/fetch_bathymetry.sh`** (idempotent, sha256 recorded) into `data/external/bathymetry/`.
+- [x] **`processing/masks.py` `AnalysisMask`**, built once per grid:
+  - **Amended at DA-6 (see design-threads "DA-1 amendment"): land mask and buffer from CUDEM elevation > 0 m, not GSHHG.**
+  - coastal buffer `150 m` (D-2: the midpoint of the Brief's 100–200 m);
   - a **depth raster** from the bathymetry dataset. The shallow exclusion is **per product** (B7):
     `ProductSpec.shallow_exclusion_m` (e.g. set for `tur_nechad2016`, `spm_nechad2016`,
     `chl_re_gons740`; `null` for `fai`, `fait`, `ndvi`, where the NIR/SWIR bottom signal is small and
@@ -783,7 +784,7 @@ Estimated size: 1 200–1 500 LOC.
     tests are written.
   - **guard:** if any product's analysis pixels < 10 000 for the AOI, stop with a user gate
     (the shelf may be too shallow for that product) rather than dividing by ~0.
-- [ ] **`processing/quality.py`, a pure core (DA-2):**
+- [x] **`processing/quality.py`, a pure core (DA-2):**
   - the valid-pixel predicate **as amended by V8**: cirrus, high-TOA and negative-rhos flags == 0, with the cloud flags (cirrus, high-TOA) dilated by `cloud_dilation_px`; **bit 0 (SWIR threshold) is recorded but never excludes**; product finite with `_FillValue` → NaN;
   - `FlagStatistics`, `RangeViolation`, `QualityReport`;
   - gates, applied in order:
@@ -795,22 +796,22 @@ Estimated size: 1 200–1 500 LOC.
     6. `valid_fraction` < 0.20, computed **per product** over that product's analysis pixels (B7).
   - Initial numeric values are set from Phase 1 spike data (scenes A and D), each with its basis
     written into `configs/quality.yaml`, which is the file behind config section `quality` (B14). Numbers are fixed **after** the bathymetry item above (B7).
-- [ ] **`configs/products.yaml` `ProductSet` v1:**
+- [x] **`configs/products.yaml` `ProductSet` v1:**
   - all Q4 parameters;
   - publish flags per T3;
   - units, accepted and display ranges, and caveats taken from research §6.
-- [ ] **`publishing`:**
+- [x] **`publishing`:**
   - `true_colour` COG from L2R `rhos` B04/B03/B02, with one fixed stretch;
   - the restricted release (T6);
   - full `ProvenanceRecord`;
   - `PublicationProfile` v1.
-- [ ] **Failure codes for stages P3–P8** are wired with their evidence. Ancillary fallback fails the
+- [x] **Failure codes for stages P3–P8** are wired with their evidence. Ancillary fallback fails the
   attempt.
-- [ ] **`series.json` in every release (DA #8)**. For now it holds the whole-AOI zone rows, so the
+- [x] **`series.json` in every release (DA #8)**. For now it holds the whole-AOI zone rows, so the
   index can be rebuilt from releases.
-- [ ] **Downstream re-entry (DA-4).** CLI `pipeline republish --observation|--range` re-enters at P5
+- [x] **Downstream re-entry (DA-4).** CLI `pipeline republish --observation|--range` re-enters at P5
   from the archive when only the `DownstreamProfile` changed.
-- [ ] **User-approval gate (DA-6; PRD rollout step 2).** After the runtime probe, present scene A's
+- [x] **User-approval gate (DA-6; PRD rollout step 2).** *(Approved by the user 2026-09-15: A and D unusable, G usable, product appearance accepted.)* After the runtime probe, present scene A's
   COGs, `l2_flags`, `quality.json` verdict and provenance, plus scene D's verdict. Phase 4 starts
   only on explicit approval.
 

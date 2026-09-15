@@ -14,6 +14,7 @@ from oceanos.domain import CogProfile
 
 CONTINUOUS_COG = CogProfile(predictor=3, overview_resampling="AVERAGE", data_type="float32")
 BITFIELD_COG = CogProfile(predictor=2, overview_resampling="MODE", data_type="int32")
+DISPLAY_COG = CogProfile(predictor=2, overview_resampling="AVERAGE", data_type="uint8")
 
 
 def overview_count(width: int, height: int, blocksize: int) -> int:
@@ -25,10 +26,11 @@ def overview_count(width: int, height: int, blocksize: int) -> int:
 
 
 def write_cog(source: Path, destination: Path, profile: CogProfile) -> None:
-    """Atomically translate one single-band GeoTIFF into a COG using ``profile`` exactly."""
+    """Atomically translate a GeoTIFF into a COG using ``profile`` exactly (one band, or RGB for uint8)."""
     with rasterio.open(source) as dataset:
-        if dataset.count != 1 or dataset.dtypes[0] != profile.data_type:
-            raise ValueError(f"COG profile expects one {profile.data_type} band: {source}")
+        bands_allowed = {3} if profile.data_type == "uint8" else {1}
+        if dataset.count not in bands_allowed or any(dtype != profile.data_type for dtype in dataset.dtypes):
+            raise ValueError(f"COG profile expects {profile.data_type} with {sorted(bands_allowed)} band(s): {source}")
         levels = overview_count(dataset.width, dataset.height, profile.blocksize)
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary: Path | None = None

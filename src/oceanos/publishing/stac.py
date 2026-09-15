@@ -58,7 +58,8 @@ def build_item(
     geometry: dict[str, Any], bbox: tuple[float, float, float, float],
     release_dir: Path, products_aoi_dir: Path, flag_spec: FlagSpec,
     acolite_software: str, oceanos_software: str, acolite_release_tag: str,
-    status: str, scene_item_paths: list[Path],
+    status: str, scene_item_paths: list[Path], valid_fraction: float | None = None,
+    scientific_label: str | None = None,
 ) -> dict[str, Any]:
     """Build the Item for the current release; every href is relative to the Item file."""
     location = item_path(products_aoi_dir, overpass_id)
@@ -73,7 +74,11 @@ def build_item(
             "href": relative(release_dir / asset.href), "type": asset.media_type,
             "roles": list(asset.roles), "oceanos:sha256": asset.sha256,
         }
-        if asset.data_type is not None:
+        if asset.product_key == "true_colour":
+            entry["bands"] = [
+                {"data_type": "uint8", "nodata": 0, "eo:common_name": name} for name in ("red", "green", "blue")
+            ]
+        elif asset.data_type is not None:
             band: dict[str, Any] = {"data_type": asset.data_type}
             if asset.nodata is not None:
                 band["nodata"] = asset.nodata
@@ -104,6 +109,9 @@ def build_item(
             "oceanos:tier": release.tier.value,
             "oceanos:release_id": release.release_id,
             "oceanos:run_key": release.run_key,
+            "oceanos:visibility": release.visibility,
+            **({"oceanos:valid_fraction": valid_fraction} if valid_fraction is not None else {}),
+            **({"oceanos:scientific_label": scientific_label} if scientific_label is not None else {}),
         },
         "assets": assets,
         "links": [

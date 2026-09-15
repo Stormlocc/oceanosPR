@@ -6,6 +6,12 @@ import fnmatch
 import re
 from typing import Literal
 
+from oceanos.acolite.mapping import (
+    Band,
+    Platform,
+    acolite_variable,
+    platform_wavelengths,
+)
 from oceanos.domain import AcoliteRunOutputs, AncillaryTier, ProductSpec
 
 _WAVELENGTH_SUFFIX = re.compile(r"_(\d{3,4})$")
@@ -44,3 +50,27 @@ def resolve_product(
     suffix = _WAVELENGTH_SUFFIX.search(name)
     wavelength = float(suffix.group(1)) if suffix else None
     return ("l2w" if role == "l2w" else "l2r"), name, wavelength
+
+
+def surface_reflectance_bands(
+    outputs: AcoliteRunOutputs, platform: Platform, bands: tuple[str, str, str],
+) -> tuple[str, str, str]:
+    """Return the L2R surface-reflectance variables for S2 band names (T2, T4)."""
+    names = tuple(f"rhos_{platform_wavelengths(platform)[_band_index(band)]}" for band in bands)
+    missing = [name for name in names if name not in outputs.l2r_variables]
+    if missing:
+        raise ProductResolutionError(f"surface reflectance variables missing from L2R: {missing}")
+    return names[0], names[1], names[2]
+
+
+def residual_swir_variable(outputs: AcoliteRunOutputs, platform: Platform) -> str | None:
+    """Water reflectance at ~1610 nm (B11), used by the residual-glint gate; None if absent."""
+    name = acolite_variable(platform, "B11", "rhow")
+    return name if name in outputs.variables_present else None
+
+
+def _band_index(band: str) -> int:
+    order: tuple[Band, ...] = ("B01", "B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B09", "B10", "B11", "B12")
+    if band not in order:
+        raise ProductResolutionError(f"unknown Sentinel-2 band: {band}")
+    return order.index(band)

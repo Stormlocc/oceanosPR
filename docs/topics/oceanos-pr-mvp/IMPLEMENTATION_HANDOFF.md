@@ -6,10 +6,66 @@ authoritative; this file records what they cannot.
 ## State (2026-09-15)
 
 - **Branch:** `feat/oceanos-pr-mvp`.
-- **Last completed unit:** Phase 2.3 (conformance, minimal release, runtime probe), commit
-  `Fase 2.3: conformidad, release mínima y probe real`. Phase 2 container is `[DONE]`.
-- **Next unit:** Phase 3 (quality, masks, full product set, provenance). Not started.
+- **Last completed unit:** Phase 3 (quality, masks, full product set, provenance), commit
+  `Fase 3: calidad, máscaras, set completo de productos y procedencia`. DA-6 approved by the user.
+- **Next unit:** Phase 4 (index, orchestration, retention, bounded backfill). Not started.
 - **Untracked by design:** `.agents/`, `data/`, `.work/`.
+
+## Phase 3 closure record
+
+**Done in the working tree (uncommitted):**
+- Research + user decisions recorded in `design/design-threads.md` ("DA-3 / DA-2 — Phase 3 values"):
+  CUDEM 1/9″ PR 2022v2, 7 m shallow cut (tur/spm/chl), strict glint gates (neg rhos ≤ 0.10, SWIR p90
+  ≤ 0.02), AOT ≤ 0.5, chl published with strong caveat. Research artifact (memory tier):
+  `.work/oceanos-pr-mvp/bathymetry-research/RESEARCH.md`; measurements:
+  `.work/oceanos-pr-mvp/spikes/phase3_measurements.json`.
+- Code: `configs/{quality,publication}.yaml`, `configs/products.yaml` v1, `scripts/fetch_bathymetry.sh`
+  (tiles downloaded, checksums pinned from two mirrors), `processing/masks.py` AnalysisMask,
+  `processing/quality.py`, `timeseries/`, `publishing/true_colour.py`, `pipeline/downstream.py`
+  (P5–P8 from archive), `pipeline/republish.py` + CLI `pipeline republish`, `run_one` refactor,
+  loaders, domain types, glint angle moved from `acolite.verify` to an OCEANOS derivation.
+- Tests: `test_quality.py`, `test_masks.py`, `test_release_visibility.py`, `test_provenance.py`,
+  `test_republish.py`, fixture `tests/fixtures/bathymetry/cudem_window.tif`; 2.2/2.3 tests adapted.
+  The `cloudy/` fixture lacks the full product set, so the visibility test injects its real
+  `l2_flags` at P5 (documented in the test).
+- Untracked by design and not to commit: `catalog/` changes from the probes (user decision pending).
+
+**Last verification:**
+
+| Command | Result |
+| --- | --- |
+| `uv run pytest -q` | 219 passed |
+| `uv run ruff check src tests scripts` | clean |
+| strict mypy (acolite, domain, pipeline, timeseries, storage) | clean |
+| `uv run pytest --run-acolite -q tests/acolite_golden` | 1 passed |
+| `scripts/probe_run_one.sh --force-reprocess` (scene A) + provenance-keys check | exit 0 / ok |
+| `SCENE_KEY=scene_d scripts/probe_run_one.sh` | exit 0 |
+
+**Real verdicts:** scene A `rel-69d853c675bdbd36` unusable (residual glint: neg rhos 0.203, SWIR p90
+0.052; AOT 0.276) → restricted release. Scene D `rel-c9360406b16324a0` unusable (AOT 0.629, SWIR
+0.059, valid fraction 0.055) → restricted release.
+
+**Scene G (2026-09-15 ~21:35 UTC):** `rel-0618349a4f7d239f` usable, public, 8 COGs (AOT 0.055 MOD1,
+neg rhos 0.017, SWIR p90 0.0006, tur median 1.46 FNU, valid 0.973; chl valid 0.16).
+
+**DA-1 conflict — RESOLVED with the user (2026-09-15):** GSHHG was displaced ≈ 380 m S / 150 m W
+over La Parguera. The user approved the recommendation: `LandMask` v2 and `AnalysisMask` v2 coastal
+buffer now derive from CUDEM (elevation > 0 m); recorded as "DA-1 amendment" in
+`design/design-threads.md` and noted in the PLAN. Tests updated (fixture window land 539, water
+outside buffer 58 481); 219 passed. Releases republished from the archive with
+`pipeline republish --range 2026-01-01 2026-12-31` (no ACOLITE, 19 s), all `verify_release` OK:
+A `rel-359d2f776a8351b6` restricted, D `rel-ce4029b14157ff75` restricted, G `rel-2f3c296ee79e133c`
+public (tur valid 0.974, median 1.48 FNU). AOI land 670 426 px; tur/spm/chl analysis 894 902 px.
+Review page updated: https://claude.ai/artifact/AD6sZhVtYFbtcpghGhot6r (Version 2).
+
+**DA-6:** approved by the user (2026-09-15).
+
+**Open items carried to later phases:** `catalog/` changes from probes are uncommitted (user decision
+pending); GSHHG fetch script and `env.gshhg_missing` probe check are now unused by the pipeline
+(Phase 7 clean-up); SAFE/workspace retention is Phase 4 P9 (≈ 2.3 GB SAFE + work dirs in `data/`).
+
+**Exact next action:** start Phase 4 by reading its PLAN section; it runs only when the user hands it
+over.
 
 ## Phase 2.3 closure notes
 
@@ -63,8 +119,3 @@ authoritative; this file records what they cannot.
 | `scripts/probe_run_one.sh` (real CDSE + ACOLITE) | exit 0 |
 | `uv run ruff check src tests scripts` | clean |
 | `uv run mypy src/oceanos/acolite src/oceanos/domain.py src/oceanos/pipeline` | clean |
-
-## Exact next action
-
-Start Phase 3 by reading its PLAN section and `design/contracts.md` P6/P7 (quality policy, masks,
-true colour). Scientific thresholds need user review (PLAN runs Phase 3 in the main session).

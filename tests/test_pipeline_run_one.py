@@ -10,12 +10,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 import rasterio
-from support.pipeline_env import FIXTURES, OVERPASS, make_env
+from support.pipeline_env import BATHYMETRY, FIXTURES, OVERPASS, make_env
 
 from oceanos.domain import FailureCode, RunState
 from oceanos.pipeline.archive import AttemptsLedger
 from oceanos.pipeline.run_one import PipelineError, latest_release_dir, run_one
-from oceanos.processing.masks import rasterize_land
+from oceanos.processing.masks import elevation_on_grid, land_from_elevation
 from oceanos.publishing import release_ledger
 
 
@@ -32,11 +32,11 @@ def _releases(root: Path) -> list[Path]:
 
 def test_run_one_publishes_masked_water_product_and_unmasked_flags(tmp_path: Path, monkeypatch) -> None:
     env = make_env(tmp_path, monkeypatch)
-    result = run_one(env.settings, OVERPASS, parameters=env.parameters, products=env.products, dependencies=env.dependencies())
+    result = run_one(env.settings, OVERPASS, **env.configs(), dependencies=env.dependencies())
 
     assert result.status == "published"
     assert _releases(env.layout.products) == [result.release_dir]
-    land = rasterize_land(FIXTURES / "gshhg_clip.geojson", env.grid)
+    land = land_from_elevation(elevation_on_grid([BATHYMETRY], env.grid))
     with rasterio.open(result.release_dir / "tur_nechad2016.tif") as dataset:
         turbidity = dataset.read(1)
     with rasterio.open(result.release_dir / "l2_flags.tif") as dataset:
@@ -63,12 +63,12 @@ def test_run_one_publishes_masked_water_product_and_unmasked_flags(tmp_path: Pat
 def test_same_run_key_is_skipped_and_force_reprocess_supersedes_previous(tmp_path: Path, monkeypatch) -> None:
     env = make_env(tmp_path, monkeypatch)
     dependencies = env.dependencies()
-    first = run_one(env.settings, OVERPASS, parameters=env.parameters, products=env.products, dependencies=dependencies)
+    first = run_one(env.settings, OVERPASS, **env.configs(), dependencies=dependencies)
 
-    skipped = run_one(env.settings, OVERPASS, parameters=env.parameters, products=env.products, dependencies=dependencies)
+    skipped = run_one(env.settings, OVERPASS, **env.configs(), dependencies=dependencies)
     assert (skipped.status, skipped.release_id, skipped.run_key) == ("skipped", first.release_id, first.run_key)
 
-    second = run_one(env.settings, OVERPASS, parameters=env.parameters, products=env.products,
+    second = run_one(env.settings, OVERPASS, **env.configs(),
                      force_reprocess=True, dependencies=dependencies)
     assert second.run_key == first.run_key and second.release_id != first.release_id
     assert [path.name for path in _releases(env.layout.products)] == [second.release_id]
@@ -88,7 +88,7 @@ def test_skipped_acolite_run_publishes_nothing_and_records_failure(tmp_path: Pat
     env.variant = "skipped"
 
     with pytest.raises(PipelineError) as error:
-        run_one(env.settings, OVERPASS, parameters=env.parameters, products=env.products, dependencies=env.dependencies())
+        run_one(env.settings, OVERPASS, **env.configs(), dependencies=env.dependencies())
 
     assert error.value.failure.code is FailureCode.ACOLITE_SKIPPED
     assert _releases(env.layout.products) == []
@@ -101,12 +101,12 @@ def test_skipped_acolite_run_publishes_nothing_and_records_failure(tmp_path: Pat
 def test_run_one_requires_prior_grid_and_scene_search(tmp_path: Path, monkeypatch) -> None:
     env = make_env(tmp_path, monkeypatch)
     with pytest.raises(ValueError, match="scenes search"):
-        run_one(env.settings, "S2B_20260705T150801_R082", parameters=env.parameters, products=env.products,
+        run_one(env.settings, "S2B_20260705T150801_R082", **env.configs(),
                 dependencies=env.dependencies())
 
     env.layout.grid_json(env.aoi_id).unlink()
     with pytest.raises(ValueError, match="grid build"):
-        run_one(env.settings, OVERPASS, parameters=env.parameters, products=env.products, dependencies=env.dependencies())
+        run_one(env.settings, OVERPASS, **env.configs(), dependencies=env.dependencies())
 
 
 def test_cli_latest_release_prints_current_release(tmp_path: Path, monkeypatch, capsys) -> None:
@@ -116,6 +116,20 @@ def test_cli_latest_release_prints_current_release(tmp_path: Path, monkeypatch, 
     with pytest.raises(SystemExit):
         main(["pipeline", "latest-release", "--overpass", OVERPASS, "--config", str(env.config)])
     capsys.readouterr()
-    result = run_one(env.settings, OVERPASS, parameters=env.parameters, products=env.products, dependencies=env.dependencies())
+    result = run_one(env.settings, OVERPASS, **env.configs(), dependencies=env.dependencies())
     assert main(["pipeline", "latest-release", "--overpass", OVERPASS, "--config", str(env.config)]) == 0
     assert capsys.readouterr().out.strip() == str(result.release_dir)
+
+
+def test_ancillary_fallback_fails_the_attempt_with_evidence(tmp_path: Path, monkeypatch) -> None:
+    env = make_env(tmp_path, monkeypatch)
+    env.variant = "ancillary_fallback"
+
+    with pytest.raises(PipelineError) as error:
+        run_one(env.settings, OVERPASS, **env.configs(), dependencies=env.dependencies())
+
+    failure = error.value.failure
+    assert failure.code is FailureCode.ACOLITE_ANCILLARY_FALLBACK and failure.retryable
+    assert failure.evidence and _releases(env.layout.products) == []
+    (attempt,) = AttemptsLedger(env.layout.state / "ledger/attempts.jsonl").latest().values()
+    assert attempt.state is RunState.FAILED and attempt.stages[-1].stage.value == "verify"

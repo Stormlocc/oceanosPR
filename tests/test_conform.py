@@ -10,11 +10,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 import rasterio
-from support.pipeline_env import FIXTURES, window_grid
+from support.pipeline_env import BATHYMETRY, FIXTURES, window_grid
 
 from oceanos.domain import FailureCode, LandMaskRef, LayerSource
 from oceanos.processing import ConformError, assert_aligned, conform_layer
-from oceanos.processing.masks import rasterize_land
+from oceanos.processing.masks import elevation_on_grid, land_from_elevation
 
 AOI_ID = "aoi-la-parguera-0123456789ab"
 L2W = FIXTURES / "success/S2A_MSI_2026_07_02_15_08_19_T19QGV_L2W.nc"
@@ -54,7 +54,7 @@ def _flags(destination: Path, grid):
 
 def test_aligned_water_product_is_copied_and_nan_on_every_land_pixel(tmp_path: Path) -> None:
     grid = window_grid(AOI_ID)
-    land = rasterize_land(FIXTURES / "gshhg_clip.geojson", grid)
+    land = land_from_elevation(elevation_on_grid([BATHYMETRY], grid))
     reference = LandMaskRef(version="1", sha256="1" * 64)
     layer = _continuous(tmp_path / "tur.tif", grid, land=land, land_mask=reference)
 

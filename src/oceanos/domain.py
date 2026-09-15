@@ -451,6 +451,14 @@ class AncillaryEvidence(MetadataModel):
     fallback_detected: bool
 
 
+class SunViewGeometry(MetadataModel):
+    """Scene-mean solar/view angles in degrees, as recorded in the L2R attributes."""
+
+    sza: float = Field(ge=0, le=90)
+    vza: float = Field(ge=0, le=90)
+    raa: float = Field(ge=-360, le=360)
+
+
 class AerosolEvidence(MetadataModel):
     aot550: float
     aerosol_model: str
@@ -471,6 +479,7 @@ class AcoliteRunOutputs(MetadataModel):
     flag_spec: FlagSpec
     ancillary: AncillaryEvidence
     glint_angle_deg: float | None = None
+    geometry: SunViewGeometry | None = None
 
 
 class CoastlineSource(MetadataModel):
@@ -522,7 +531,22 @@ class CogProfile(MetadataModel):
     predictor: Literal[2, 3]
     overview_resampling: Literal["AVERAGE", "MODE", "NEAREST"]
     blocksize: int = Field(default=256, ge=64, le=4096)
-    data_type: Literal["float32", "int32"]
+    data_type: Literal["float32", "int32", "uint8"]
+
+
+class TrueColourSpec(MetadataModel):
+    """Display-only RGB from L2R surface reflectance with one stretch for every date (T4)."""
+
+    bands: tuple[str, str, str] = ("B04", "B03", "B02")
+    stretch: tuple[float, float]
+    gamma: float = Field(gt=0)
+
+    @field_validator("stretch")
+    @classmethod
+    def ordered_stretch(cls, value: tuple[float, float]) -> tuple[float, float]:
+        if not value[0] < value[1]:
+            raise ValueError("stretch must be increasing")
+        return value
 
 
 class PublicationProfile(MetadataModel):
@@ -531,6 +555,8 @@ class PublicationProfile(MetadataModel):
     continuous: CogProfile
     bitfield: CogProfile
     published_products: tuple[str, ...] = Field(min_length=1)
+    display: CogProfile | None = None
+    true_colour: TrueColourSpec | None = None
 
     @property
     def profile_id(self) -> str:
@@ -621,13 +647,14 @@ class ProvenanceAncillary(MetadataModel):
 
 class ProvenanceProduct(MetadataModel):
     product_key: str
-    acolite_variable: str
+    acolite_variable: str | tuple[str, ...]
     unit: str | None
     s2_calibrated: bool
     caveat: str | None
     source_sha256: Sha256
     grid_coverage_fraction: float = Field(ge=0, le=1)
     land_mask: LandMaskRef | None
+    shallow_exclusion_m: float | None = None
 
 
 class ProvenanceTimestamps(MetadataModel):
@@ -651,3 +678,142 @@ class ProvenanceRecord(MetadataModel):
     glint_angle_deg: float | None
     products: tuple[ProvenanceProduct, ...] = Field(min_length=1)
     timestamps: ProvenanceTimestamps
+    analysis_mask: AnalysisMaskRef | None = None
+    quality_verdict: UsabilityVerdict | None = None
+    derivations: tuple[str, ...] = ()
+    scientific_label: str | None = None
+
+
+class BathymetrySource(MetadataModel):
+    dataset: str = Field(min_length=1)
+    version: str = Field(min_length=1)
+    sha256: Sha256
+
+
+class AnalysisMask(MetadataModel):
+    """Statistics-only mask per grid: coastal buffer plus per-product optically shallow cut (DA-3, B7)."""
+
+    schema_version: str = "1.0"
+    grid_id: GridId
+    version: str = Field(min_length=1)
+    coastal_buffer_m: float = Field(ge=0)
+    coastline_source: CoastlineSource
+    bathymetry_source: BathymetrySource
+    coastal_buffer: ArtifactRef
+    depth: ArtifactRef
+    water_pixels: int = Field(ge=0)
+    analysis_pixels: dict[str, int]
+    shallow_exclusion_m: dict[str, float | None]
+
+
+class AnalysisMaskRef(MetadataModel):
+    version: str = Field(min_length=1)
+    sha256: Sha256
+
+
+class RangeRule(MetadataModel):
+    product_key: str = Field(min_length=1)
+    min: float
+    max: float
+    max_offending_fraction: float = Field(ge=0, le=1)
+
+    @model_validator(mode="after")
+    def ordered(self) -> RangeRule:
+        if not self.min < self.max:
+            raise ValueError("range rule min must be below max")
+        return self
+
+
+class QualityPolicy(MetadataModel):
+    """Versioned observation-usability policy (DA-2, amended by V8)."""
+
+    schema_version: str = "1.0"
+    version: str = Field(min_length=1)
+    min_valid_fraction: float = Field(ge=0, le=1)
+    min_grid_coverage: float = Field(ge=0, le=1)
+    cloud_dilation_px: int = Field(ge=0, le=50)
+    aot550_max: float = Field(gt=0)
+    allowed_aerosol_models: tuple[str, ...] = Field(min_length=1)
+    max_negative_rhos_fraction: float = Field(ge=0, le=1)
+    max_residual_swir_rhow: float = Field(gt=0)
+    range_rules: tuple[RangeRule, ...] = ()
+    reject_on_ancillary_fallback: bool = True
+    coastal_buffer_m: float = Field(ge=0)
+    min_analysis_pixels: int = Field(ge=1)
+    basis: dict[str, str] = Field(default_factory=dict)
+
+
+class UsabilityVerdict(str, Enum):
+    USABLE = "usable"
+    UNUSABLE = "unusable"
+
+
+class ObservationStatus(str, Enum):
+    EXCLUDED_SCENE_CLOUD = "excluded_scene_cloud"
+    INCOMPLETE_COVERAGE = "incomplete_coverage"
+    PENDING = "pending"
+    PROCESSING_FAILED = "processing_failed"
+    NO_USABLE_OBSERVATION = "no_usable_observation"
+    USABLE = "usable"
+
+
+class FlagStatistics(MetadataModel):
+    water_pixels: int = Field(ge=0)
+    valid_pixels: int = Field(ge=0)
+    per_bit_counts: dict[str, int]
+
+
+class RangeViolation(MetadataModel):
+    product_key: str
+    rule: RangeRule
+    offending_fraction: float = Field(ge=0, le=1)
+
+
+class ProductQuality(MetadataModel):
+    product_key: str
+    analysis_pixels: int = Field(ge=0)
+    valid_pixels: int = Field(ge=0)
+    valid_fraction: float = Field(ge=0, le=1)
+    gates_verdict: bool
+
+
+class QualityReport(MetadataModel):
+    schema_version: str = "1.0"
+    observation_id: str = Field(min_length=1)
+    attempt_id: RunAttemptId
+    policy_version: str = Field(min_length=1)
+    grid_coverage_fraction: float = Field(ge=0, le=1)
+    flags: FlagStatistics
+    products: tuple[ProductQuality, ...]
+    negative_rhos_fraction: float = Field(ge=0, le=1)
+    residual_swir_rhow_p90: float | None
+    aot550: float
+    aerosol_model: str
+    glint_angle_deg: float | None
+    range_violations: tuple[RangeViolation, ...]
+    ancillary: AncillaryEvidence
+    verdict: UsabilityVerdict
+    status: ObservationStatus
+    reasons: tuple[str, ...]
+
+
+class SeriesStatistics(MetadataModel):
+    valid_pixels: int = Field(ge=0)
+    valid_fraction: float = Field(ge=0, le=1)
+    mean: float
+    median: float
+    p10: float
+    p90: float
+    std: float
+
+
+class SeriesPoint(MetadataModel):
+    zone_id: str = Field(min_length=1)
+    observation_id: str = Field(min_length=1)
+    datetime: AwareDatetime
+    product_key: str = Field(min_length=1)
+    unit: str | None
+    status: ObservationStatus
+    statistics: SeriesStatistics | None
+    release_id: ReleaseId | None
+    tier: AncillaryTier

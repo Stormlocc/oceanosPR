@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import itertools
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
@@ -21,6 +21,8 @@ from oceanos.config import (
     load_acolite_parameter_set,
     load_config,
     load_product_set,
+    load_publication_profile,
+    load_quality_policy,
 )
 from oceanos.domain import (
     AcoliteInstallation,
@@ -38,6 +40,7 @@ FIXTURES = ROOT / "tests/fixtures/acolite"
 OVERPASS = "S2A_20260702T150741_R082"
 SCENE_ID = "S2A_MSIL1C_20260702T150741_N0512_R082_T19QGV_20260702T214456"
 PIN_COMMIT = "f73cbe73887c2b114d9d3c70865effee73871525"
+BATHYMETRY = ROOT / "tests/fixtures/bathymetry/cudem_window.tif"
 
 
 def window_grid(aoi_id: str, *, shift_columns: int = 0, shift_metres: float = 0) -> DeliveryGrid:
@@ -73,6 +76,8 @@ class PipelineEnv:
     aoi_id: str
     grid: DeliveryGrid
     variant: str = "success"
+    permissive_glint: bool = False
+    calls: dict = field(default_factory=lambda: {"acquire": 0, "acolite": 0})
 
     @property
     def parameters(self):
@@ -82,11 +87,30 @@ class PipelineEnv:
     def products(self):
         return load_product_set(ROOT / "configs/products.yaml", self.parameters)
 
+    @property
+    def policy(self):
+        policy = load_quality_policy(ROOT / "configs/quality.yaml", self.products)
+        if self.permissive_glint:
+            # The success fixture is the glint-affected scene A window; relax only the residual-glint gates.
+            policy = policy.model_copy(update={
+                "version": "test-permissive-glint", "max_negative_rhos_fraction": 1.0, "max_residual_swir_rhow": 1.0,
+            })
+        return policy
+
+    @property
+    def publication(self):
+        return load_publication_profile(ROOT / "configs/publication.yaml", self.products)
+
+    def configs(self) -> dict:
+        return {"parameters": self.parameters, "products": self.products, "policy": self.policy,
+                "publication": self.publication}
+
     def dependencies(self) -> RunOneDependencies:
         clock = itertools.count()
         start = datetime(2026, 9, 15, 12, 0, 0, tzinfo=UTC)
 
         def acquire(source: SceneMetadata) -> AcquiredScene:
+            self.calls["acquire"] += 1
             content = f"fake SAFE for {source.scene_id}".encode()
             digest = sha256(content).hexdigest()
             relpath = f"sentinel2-l1c/{digest}/{source.scene_id}.zip"
@@ -107,6 +131,7 @@ class PipelineEnv:
             )
 
         def run_acolite(settings_path: Path, workspace: Path, runid: str, lock):
+            self.calls["acolite"] += 1
             assert settings_path.is_file()
             return FakeAcoliteRunner(FIXTURES, self.variant).run(workspace, runid=runid)
 
@@ -124,8 +149,10 @@ def make_env(tmp_path: Path, monkeypatch) -> PipelineEnv:
     config["acolite"]["external_dir"] = str(FIXTURES)
     path = tmp_path / "mvp.yaml"
     path.write_text(yaml.safe_dump(config), encoding="utf-8")
-    # The offline coastline is the Phase 1 GSHHG clip of the fixture window.
-    monkeypatch.setattr("oceanos.pipeline.run_one.GSHHG_LAND_LAYER", Path("gshhg_clip.geojson"))
+    for name in ("acolite_parameters.yaml", "products.yaml", "quality.yaml", "publication.yaml"):
+        (tmp_path / name).write_text((ROOT / "configs" / name).read_text(encoding="utf-8"), encoding="utf-8")
+    # Offline reference data: a CUDEM crop of the fixture window (land mask and bathymetry).
+    monkeypatch.setattr("oceanos.pipeline.downstream.reference_data", lambda settings: [BATHYMETRY])
     settings = load_config(path)
     layout = StorageLayout(
         raw=settings.storage.raw, work=settings.storage.work, archive=settings.storage.archive,

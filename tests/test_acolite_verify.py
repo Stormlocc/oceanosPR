@@ -37,7 +37,9 @@ def test_success_fixture_returns_verified_outputs_and_reads_rhorc_from_l2r(tmp_p
     assert result.flag_spec.usable_mask_value == 47
     assert result.aerosol.aerosol_model == "ACOLITE-LUT-202110-MOD2"
     assert result.ancillary.fallback_detected is False
-    assert result.glint_angle_deg == pytest.approx(22.1310663539)
+    assert result.glint_angle_deg is None
+    assert result.geometry is not None
+    assert (result.geometry.sza, result.geometry.vza) == (pytest.approx(19.9961428), pytest.approx(3.0005037))
 
 
 def test_skipped_fixture_with_zero_exit_is_failure(tmp_path: Path) -> None:

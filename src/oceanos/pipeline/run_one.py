@@ -1,20 +1,15 @@
-"""Tracer-bullet orchestration of one observation: A1 → A2 → P1–P8 under the writer lock."""
+"""One observation end to end: A1 → A2 → P1–P4 under the writer lock, then P5–P8 downstream."""
 
 from __future__ import annotations
 
-import shutil
 import socket
 import subprocess
-import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
 from typing import Literal
-
-from rasterio.warp import transform_geom  # type: ignore[import-untyped]
-from shapely.geometry import box, mapping  # type: ignore[import-untyped]
 
 import oceanos
 from oceanos.acolite import (
@@ -23,11 +18,7 @@ from oceanos.acolite import (
     SettingsRenderer,
     SubprocessAcoliteRunner,
 )
-from oceanos.acolite.products import (
-    ProductResolutionError,
-    ancillary_type_for,
-    resolve_product,
-)
+from oceanos.acolite.products import ancillary_type_for
 from oceanos.acolite.runner import ProcessOutcome
 from oceanos.acolite.settings import limit_for_grid
 from oceanos.aoi import load_aoi
@@ -41,56 +32,34 @@ from oceanos.domain import (
     AcoliteRunOutputs,
     AcquiredScene,
     AncillaryTier,
-    ArtifactRef,
-    ConformedLayer,
-    DownstreamProfile,
     FailureCode,
     FailureRecord,
     FailureScope,
-    LandMaskRef,
-    LayerSource,
     OwnedSettings,
     ProductSet,
-    ProvenanceAcolite,
-    ProvenanceAncillary,
-    ProvenanceOceanos,
-    ProvenanceProduct,
-    ProvenanceRecord,
-    ProvenanceScene,
-    ProvenanceTimestamps,
     PublicationProfile,
-    PublishedAsset,
-    Release,
+    QualityPolicy,
     RunAttempt,
     RunState,
     StageName,
     StageResult,
-    release_id,
     run_key,
 )
 from oceanos.pipeline.archive import ArchiveStore, AttemptsLedger, recover_stale_attempt
+from oceanos.pipeline.downstream import (
+    DownstreamInputs,
+    PipelineError,
+    load_archived_outputs,
+    publish_downstream,
+)
 from oceanos.pipeline.plan import (
     build_input_set,
     group_overpasses,
     select_minimal_cover_with_scenes,
 )
 from oceanos.processing.grid import DeliveryGrid
-from oceanos.processing.masks import (
-    GSHHG_LAND_LAYER,
-    LAND_MASK_VERSION,
-    ensure_land_mask,
-    read_land,
-)
-from oceanos.processing.normalize import ConformError, conform_layer
-from oceanos.publishing import (
-    BITFIELD_COG,
-    CONTINUOUS_COG,
-    build_item,
-    current_release_id,
-    publish_release,
-    reconcile,
-    write_cog,
-)
+from oceanos.processing.quality import specular_angle_deg
+from oceanos.publishing import current_release_id, reconcile
 from oceanos.publishing.release import FaultHook
 from oceanos.storage import StorageLayout, WriterLock
 
@@ -98,25 +67,12 @@ L1C_COLLECTION = "sentinel-2-l1c"
 CONTRACT_VERSION = "1"
 # Brief assumption: final (reanalysis) ancillary data are used once a scene is this old.
 FINAL_ANCILLARY_AFTER = timedelta(days=50)
-# Phase 2 has no quality policy: the verdict is hard-coded usable (PLAN Phase 2).
-TRACER_QUALITY_POLICY_VERSION = "0-hardcoded-usable"
-NO_ANALYSIS_MASK_VERSION = "none"
-PUBLICATION_PROFILE = PublicationProfile(
-    version="0", continuous=CONTINUOUS_COG, bitfield=BITFIELD_COG,
-    published_products=("tur_nechad2016", "l2_flags"),
-)
 
 AcquireFn = Callable[[SceneMetadata], AcquiredScene]
 ProbeFn = Callable[[], AcoliteInstallation | FailureRecord]
 RunAcoliteFn = Callable[[Path, Path, str, WriterLock], ProcessOutcome]
 
-
-class PipelineError(RuntimeError):
-    """One observation could not be published; carries the recorded failure."""
-
-    def __init__(self, failure: FailureRecord) -> None:
-        super().__init__(f"{failure.code.value}: {failure.message}")
-        self.failure = failure
+__all__ = ["PipelineError", "RunOneDependencies", "RunOneResult", "check_releases", "latest_release_dir", "run_one"]
 
 
 @dataclass(frozen=True)
@@ -126,6 +82,7 @@ class RunOneResult:
     release_id: str
     release_dir: Path
     attempt_id: str | None
+    visibility: Literal["public", "restricted"] | None = None
 
 
 @dataclass
@@ -182,7 +139,7 @@ def default_dependencies(settings: OceanosSettings, catalog: LocalSceneCatalog) 
     return RunOneDependencies(acquire=acquire, probe=probe, run_acolite=run_acolite, git_sha=_project_git_sha)
 
 
-def _layout(settings: OceanosSettings) -> StorageLayout:
+def layout_for(settings: OceanosSettings) -> StorageLayout:
     storage = settings.storage
     return StorageLayout(
         raw=storage.raw, work=storage.work, archive=storage.archive, products=storage.products,
@@ -196,13 +153,6 @@ def _file_sha256(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
-
-
-def _artifact(path: Path, root: Path, role: str, media_type: str) -> ArtifactRef:
-    return ArtifactRef(
-        role=role, relpath=path.relative_to(root).as_posix(), sha256=_file_sha256(path),
-        size=path.stat().st_size, media_type=media_type,
-    )
 
 
 def _failure(code: FailureCode, stage: StageName, message: str, evidence: list[str] | None = None,
@@ -221,9 +171,6 @@ class _AttemptRecorder:
         self.attempt = attempt
         self._stage_started = datetime.now(UTC)
 
-    def begin(self) -> None:
-        self._stage_started = datetime.now(UTC)
-
     def advance(self, stage: StageName, state: RunState, **detail: object) -> None:
         result = StageResult(
             stage=stage, status="ok", started_at=self._stage_started, ended_at=datetime.now(UTC),
@@ -231,7 +178,7 @@ class _AttemptRecorder:
         )
         self.attempt = self.attempt.model_copy(update={"state": state, "stages": [*self.attempt.stages, result]})
         self.ledger.append(self.attempt)
-        self.begin()
+        self._stage_started = datetime.now(UTC)
 
     def fail(self, stage: StageName, failure: FailureRecord) -> PipelineError:
         result = StageResult(
@@ -251,11 +198,12 @@ def _tier(scene_datetime: datetime, now: datetime) -> AncillaryTier:
 
 def run_one(
     settings: OceanosSettings, overpass_id: str, *, parameters: AcoliteParameterSet,
-    products: ProductSet, force_reprocess: bool = False,
-    dependencies: RunOneDependencies | None = None, fault: FaultHook | None = None,
+    products: ProductSet, policy: QualityPolicy, publication: PublicationProfile,
+    force_reprocess: bool = False, dependencies: RunOneDependencies | None = None,
+    fault: FaultHook | None = None,
 ) -> RunOneResult:
     """Publish one observation for ``overpass_id`` from a prior grid build and scene search."""
-    layout = _layout(settings)
+    layout = layout_for(settings)
     aoi = load_aoi(settings.aoi.path, name=settings.aoi.name, target_crs=settings.aoi.target_crs)
     grid_path = layout.grid_json(aoi.aoi_id)
     if not grid_path.is_file():
@@ -266,7 +214,6 @@ def run_one(
     if overpass_id not in groups:
         raise ValueError(f"overpass not in local catalog; run `scenes search` covering it first: {overpass_id}")
     deps = dependencies or default_dependencies(settings, catalog)
-    publish_fault: FaultHook = fault or (lambda _: None)
 
     # A1 + A2: selection and verified acquisition are idempotent and precede the lock.
     coverage, selected = select_minimal_cover_with_scenes(groups[overpass_id], grid)
@@ -346,6 +293,8 @@ def run_one(
         if isinstance(verified, FailureRecord):
             raise recorder.fail(StageName.VERIFY, verified)
         outputs: AcoliteRunOutputs = verified
+        if outputs.geometry is not None:
+            outputs = outputs.model_copy(update={"glint_angle_deg": specular_angle_deg(outputs.geometry)})
         recorder.advance(StageName.VERIFY, RunState.VERIFIED)
 
         # P4 archive (irreversible, I2).
@@ -355,174 +304,36 @@ def run_one(
         )
         archived_at = datetime.now(UTC)
         recorder.advance(StageName.ARCHIVE, RunState.ARCHIVED, archive=archive_dir.relative_to(layout.archive).as_posix())
+        manifest = load_archived_outputs(layout, aoi.aoi_id, overpass_id, attempt_id)
+        archived_outputs = AcoliteRunOutputs.model_validate(manifest["outputs"])
 
-        downstream = DownstreamProfile(
-            product_set_version=products.version, quality_policy_version=TRACER_QUALITY_POLICY_VERSION,
-            land_mask_version=LAND_MASK_VERSION, analysis_mask_version=NO_ANALYSIS_MASK_VERSION,
-            publication_profile_version=PUBLICATION_PROFILE.profile_id,
+        result = publish_downstream(
+            DownstreamInputs(
+                settings=settings, layout=layout, aoi_id=aoi.aoi_id, overpass_id=overpass_id, grid=grid,
+                grid_dir=grid_path.parent, catalog=catalog, attempt_id=attempt_id, run_key=key,
+                oceanos_git_sha=recorder.attempt.oceanos_git_sha, profile=profile, input_set=input_set,
+                installation_commit=installation.observed_commit, outputs=archived_outputs,
+                archived_at=archived_at, scene_datetime=scene_datetime, products=products, policy=policy,
+                publication=publication, current_release_id=current,
+            ),
+            advance=recorder.advance, fail=recorder.fail, fault=fault,
         )
-        new_release_id = release_id(attempt_id, downstream.profile_id)
-        staging_root = layout.work / "staging"
-        staging_root.mkdir(parents=True, exist_ok=True)
-        conform_dir = Path(tempfile.mkdtemp(prefix=".conform-", dir=staging_root))
-        release_staging = Path(tempfile.mkdtemp(prefix=".release-", dir=staging_root))
-        try:
-            # P5 conform.
-            grid_dir = grid_path.parent
-            land_mask = ensure_land_mask(grid_dir, grid, settings.acolite.external_dir / GSHHG_LAND_LAYER)
-            land = read_land(grid_dir, grid)
-            land_ref = LandMaskRef(version=land_mask.version, sha256=land_mask.raster.sha256)
-            out_of_scene = next((1 << bit.bit for bit in outputs.flag_spec.bits if bit.name == "out_of_scene"), None)
-            layers: list[tuple[ConformedLayer, str, float | None]] = []
-            try:
-                for spec in products.specs:
-                    if spec.publish != "cog" or spec.product_key not in PUBLICATION_PROFILE.published_products:
-                        continue
-                    role, variable, wavelength = resolve_product(outputs, spec)
-                    container_ref = outputs.l2w if role == "l2w" else outputs.l2r
-                    container = archive_dir / Path(container_ref.relpath).name
-                    masked = spec.land_masked and spec.kind != "bitfield"
-                    layer = conform_layer(
-                        container, variable, conform_dir / f"{spec.product_key}.tif", grid,
-                        product_key=spec.product_key, kind=spec.kind, unit=spec.unit,
-                        source=LayerSource(container_role=role, container_sha256=container_ref.sha256, variable=variable),
-                        out_of_scene_value=out_of_scene if spec.kind == "bitfield" else None,
-                        land=land if masked else None, land_mask=land_ref if masked else None,
-                        tier_root=conform_dir,
-                    )
-                    layers.append((layer, variable, wavelength))
-            except ProductResolutionError as exc:
-                raise recorder.fail(StageName.CONFORM, _failure(
-                    FailureCode.ACOLITE_MISSING_VARIABLE, StageName.CONFORM, str(exc)))
-            except ConformError as exc:
-                scope = FailureScope.BATCH if exc.code is FailureCode.GRID_MISALIGNED else FailureScope.OBSERVATION
-                raise recorder.fail(StageName.CONFORM, _failure(exc.code, StageName.CONFORM, str(exc), scope=scope))
-            recorder.advance(StageName.CONFORM, RunState.CONFORMED, layers=len(layers))
-
-            # P6 assess: Phase 2 tracer verdict.
-            recorder.advance(StageName.ASSESS, RunState.ASSESSED, verdict="usable", policy=TRACER_QUALITY_POLICY_VERSION)
-
-            # P7 package.
-            try:
-                assets: list[PublishedAsset] = []
-                for layer, _, wavelength in layers:
-                    bitfield = layer.kind == "bitfield"
-                    cog_profile = PUBLICATION_PROFILE.bitfield if bitfield else PUBLICATION_PROFILE.continuous
-                    target = release_staging / f"{layer.product_key}.tif"
-                    write_cog(conform_dir / layer.raster.relpath, target, cog_profile)
-                    assets.append(PublishedAsset(
-                        product_key=layer.product_key, href=target.name, sha256=_file_sha256(target),
-                        size=target.stat().st_size, media_type="image/tiff; application=geotiff; profile=cloud-optimized",
-                        roles=("data",), unit=layer.unit, nodata=layer.nodata, data_type=layer.data_type,
-                        overview_resampling=cog_profile.overview_resampling, center_wavelength_nm=wavelength,
-                    ))
-                settings_copy = release_staging / "settings_resolved.txt"
-                shutil.copy2(archive_dir / "l2r_settings.txt", settings_copy)
-                assets.append(PublishedAsset(
-                    product_key="settings_resolved", href=settings_copy.name, sha256=_file_sha256(settings_copy),
-                    size=settings_copy.stat().st_size, media_type="text/plain", roles=("metadata",),
-                ))
-                published_at = datetime.now(UTC)
-                scene_meta = {scene.scene_id: scene for scene in selected}
-                provenance = ProvenanceRecord(
-                    observation_id=observation_id, release_id=new_release_id, attempt_id=attempt_id, run_key=key,
-                    scenes=tuple(
-                        ProvenanceScene(
-                            scene_id=scene.scene_id, source_id=scene.source_id, sha256=scene.archive.sha256,
-                            processing_baseline=scene_meta[scene.scene_id].processing_baseline,
-                            platform=scene_meta[scene.scene_id].platform,
-                        )
-                        for scene in input_set.scenes
-                    ),
-                    acolite=ProvenanceAcolite(
-                        release_tag=pin.release_tag, commit_sha=installation.observed_commit,
-                        version_attribute=outputs.acolite_version_attr,
-                        settings_user_sha256=outputs.settings_user.sha256,
-                        settings_resolved_sha256=outputs.settings_resolved.sha256,
-                    ),
-                    oceanos=ProvenanceOceanos(
-                        version=oceanos.__version__, git_sha=recorder.attempt.oceanos_git_sha,
-                        acolite_profile_id=profile.profile_id, downstream_profile_id=downstream.profile_id,
-                        publication_profile_id=PUBLICATION_PROFILE.profile_id,
-                        product_set_version=products.version, quality_policy_version=TRACER_QUALITY_POLICY_VERSION,
-                    ),
-                    ancillary=ProvenanceAncillary(
-                        type=outputs.ancillary.ancillary_type, tier=tier, uoz=outputs.ancillary.uoz,
-                        uwv=outputs.ancillary.uwv, pressure=outputs.ancillary.pressure,
-                    ),
-                    glint_angle_deg=outputs.glint_angle_deg,
-                    products=tuple(
-                        ProvenanceProduct(
-                            product_key=layer.product_key, acolite_variable=variable, unit=layer.unit,
-                            s2_calibrated=next(spec.s2_calibrated for spec in products.specs if spec.product_key == layer.product_key),
-                            caveat=next(spec.caveat for spec in products.specs if spec.product_key == layer.product_key),
-                            source_sha256=layer.source.container_sha256,
-                            grid_coverage_fraction=layer.grid_coverage_fraction, land_mask=layer.land_mask,
-                        )
-                        for layer, variable, _ in layers
-                    ),
-                    timestamps=ProvenanceTimestamps(
-                        acquired=max(scene.verified_at for scene in input_set.scenes),
-                        archived=archived_at, published=published_at,
-                    ),
-                )
-                provenance_path = release_staging / "provenance.json"
-                provenance_path.write_text(provenance.model_dump_json(indent=2) + "\n", encoding="utf-8")
-                release = Release(
-                    release_id=new_release_id, observation_id=observation_id, attempt_id=attempt_id, run_key=key,
-                    downstream_profile_id=downstream.profile_id, tier=tier, visibility="public",
-                    assets=tuple(assets), quality=None,
-                    provenance=_artifact(provenance_path, release_staging, "provenance", "application/json"),
-                    supersedes=current, created_at=published_at,
-                )
-                (release_staging / "release.json").write_text(release.model_dump_json(indent=2) + "\n", encoding="utf-8")
-                geometry_4326 = transform_geom(grid.spec.crs, "EPSG:4326", mapping(box(*grid.spec.bounds)))
-                lons = [point[0] for point in geometry_4326["coordinates"][0]]
-                lats = [point[1] for point in geometry_4326["coordinates"][0]]
-                scene_hrefs = (
-                    item.get_self_href() if item is not None else None
-                    for item in (catalog.get_stac_item(scene.scene_id) for scene in input_set.scenes)
-                )
-                scene_items = [Path(href) for href in scene_hrefs if href is not None]
-                products_aoi_dir = layout.products / aoi.aoi_id
-                item = build_item(
-                    release=release, overpass_id=overpass_id, aoi_id=aoi.aoi_id, datetime_utc=scene_datetime,
-                    geometry=dict(geometry_4326), bbox=(min(lons), min(lats), max(lons), max(lats)),
-                    release_dir=layout.release_dir(aoi.aoi_id, overpass_id, new_release_id),
-                    products_aoi_dir=products_aoi_dir, flag_spec=outputs.flag_spec,
-                    acolite_software=f"{pin.release_tag}@{installation.observed_commit}",
-                    oceanos_software=f"{oceanos.__version__}@{recorder.attempt.oceanos_git_sha}",
-                    acolite_release_tag=pin.release_tag, status="usable", scene_item_paths=scene_items,
-                )
-                recorder.advance(StageName.PACKAGE, RunState.PACKAGED, release_id=new_release_id)
-
-                # P8 publish.
-                release_dir = publish_release(
-                    layout=layout, aoi_id=aoi.aoi_id, overpass_id=overpass_id, release_id=new_release_id,
-                    staged_dir=release_staging, item=item, supersedes=current, fault=publish_fault,
-                )
-            except OSError as exc:
-                raise recorder.fail(StageName.PUBLISH, _failure(
-                    FailureCode.PUBLISH_IO_ERROR, StageName.PUBLISH, f"{type(exc).__name__}: {exc}", retryable=True))
-            recorder.advance(StageName.PUBLISH, RunState.PUBLISHED, release_id=new_release_id)
-        finally:
-            shutil.rmtree(conform_dir, ignore_errors=True)
-            if release_staging.exists():
-                shutil.rmtree(release_staging, ignore_errors=True)
+    visibility: Literal["public", "restricted"] = "public" if result.report.verdict.value == "usable" else "restricted"
     return RunOneResult(
-        status="published", run_key=key, release_id=new_release_id, release_dir=release_dir, attempt_id=attempt_id,
+        status="published", run_key=key, release_id=result.release_id, release_dir=result.release_dir,
+        attempt_id=attempt_id, visibility=visibility,
     )
 
 
 def check_releases(settings: OceanosSettings) -> None:
     """Read-only reconciliation at the start of a mutating command; refuses a broken state."""
     aoi = load_aoi(settings.aoi.path, name=settings.aoi.name, target_crs=settings.aoi.target_crs)
-    reconcile(_layout(settings), aoi.aoi_id, repair=False)
+    reconcile(layout_for(settings), aoi.aoi_id, repair=False)
 
 
 def latest_release_dir(settings: OceanosSettings, overpass_id: str) -> Path:
     """Return the current release directory recorded by the derived STAC Item."""
-    layout = _layout(settings)
+    layout = layout_for(settings)
     aoi = load_aoi(settings.aoi.path, name=settings.aoi.name, target_crs=settings.aoi.target_crs)
     reconcile(layout, aoi.aoi_id, repair=False)
     current = current_release_id(layout, aoi.aoi_id, overpass_id)

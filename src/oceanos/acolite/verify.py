@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import fnmatch
-import math
 import warnings
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -24,6 +23,7 @@ from oceanos.domain import (
     FailureScope,
     FlagBit,
     FlagSpec,
+    SunViewGeometry,
 )
 
 _SKIP_FRAGMENTS = (
@@ -116,12 +116,10 @@ def _expected_unit(name: str) -> str | None:
     return None
 
 
-def _glint_angle(tags: dict[str, str]) -> float:
-    sza = math.radians(float(tags["NC_GLOBAL#sza"]))
-    vza = math.radians(float(tags["NC_GLOBAL#vza"]))
-    raa = math.radians(float(tags["NC_GLOBAL#raa"]))
-    cosine = math.cos(sza) * math.cos(vza) + math.sin(sza) * math.sin(vza) * math.cos(raa)
-    return math.degrees(math.acos(max(-1.0, min(1.0, cosine))))
+def _geometry(tags: dict[str, str]) -> SunViewGeometry:
+    return SunViewGeometry(
+        sza=float(tags["NC_GLOBAL#sza"]), vza=float(tags["NC_GLOBAL#vza"]), raa=float(tags["NC_GLOBAL#raa"]),
+    )
 
 
 class RunVerifier:
@@ -250,7 +248,7 @@ class RunVerifier:
                 dsf_fit_diagnostics=l2r_tags["NC_GLOBAL#ac_fit"],
             )
             flag_spec = _flag_spec(settings_resolved)
-            glint_angle = _glint_angle(l2r_tags)
+            geometry = _geometry(l2r_tags)
         except (KeyError, ValueError, OSError):
             return self._failure(
                 FailureCode.ACOLITE_MISSING_VARIABLE, "output metadata is incomplete",
@@ -266,5 +264,5 @@ class RunVerifier:
             variables_present=tuple(sorted(set(l2r_names) | set(l2w_names))),
             l2r_variables=tuple(sorted(l2r_names)),
             variable_units=all_units, flag_spec=flag_spec,
-            ancillary=ancillary, glint_angle_deg=glint_angle,
+            ancillary=ancillary, geometry=geometry,
         )

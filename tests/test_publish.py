@@ -36,7 +36,7 @@ def no_network(monkeypatch):
 @pytest.fixture
 def published(tmp_path: Path, monkeypatch):
     env = make_env(tmp_path, monkeypatch)
-    result = run_one(env.settings, OVERPASS, parameters=env.parameters, products=env.products, dependencies=env.dependencies())
+    result = run_one(env.settings, OVERPASS, **env.configs(), dependencies=env.dependencies())
     return env, result
 
 
@@ -71,11 +71,18 @@ def test_cog_profiles_force_overviews_and_keep_bitfield_values(tmp_path: Path) -
 def test_release_directory_contents_hashes_and_verifier(published) -> None:
     _, result = published
     names = sorted(path.name for path in result.release_dir.iterdir())
-    assert names == ["l2_flags.tif", "provenance.json", "release.json", "settings_resolved.txt", "tur_nechad2016.tif"]
+    assert names == [
+        "chl_re_gons740.tif", "fai.tif", "fait.tif", "l2_flags.tif", "ndvi.tif", "provenance.json", "quality.json",
+        "release.json", "series.json", "settings_resolved.txt", "spm_nechad2016.tif", "true_colour.tif",
+        "tur_nechad2016.tif",
+    ]
 
     release = Release.model_validate_json((result.release_dir / "release.json").read_text(encoding="utf-8"))
     assert release.release_id == result.release_id and release.visibility == "public"
-    assert {asset.product_key for asset in release.assets} == {"tur_nechad2016", "l2_flags", "settings_resolved"}
+    assert {asset.product_key for asset in release.assets} == {
+        "tur_nechad2016", "spm_nechad2016", "chl_re_gons740", "fai", "fait", "ndvi", "l2_flags", "true_colour",
+        "settings_resolved",
+    }
     flags = next(asset for asset in release.assets if asset.product_key == "l2_flags")
     assert (flags.data_type, flags.overview_resampling, flags.nodata) == ("int32", "MODE", None)
     turbidity = next(asset for asset in release.assets if asset.product_key == "tur_nechad2016")

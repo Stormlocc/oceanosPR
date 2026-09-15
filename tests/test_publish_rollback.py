@@ -44,14 +44,14 @@ def _superseded(env) -> list[str]:
 def test_crash_after_commit_step_keeps_previous_release_until_reconciled(tmp_path: Path, monkeypatch, step, item_switched) -> None:
     env = make_env(tmp_path, monkeypatch)
     dependencies = env.dependencies()
-    first = run_one(env.settings, OVERPASS, parameters=env.parameters, products=env.products, dependencies=dependencies)
+    first = run_one(env.settings, OVERPASS, **env.configs(), dependencies=dependencies)
 
     def crash(name: str) -> None:
         if name == step:
             raise Crash(name)
 
     with pytest.raises(Crash):
-        run_one(env.settings, OVERPASS, parameters=env.parameters, products=env.products,
+        run_one(env.settings, OVERPASS, **env.configs(),
                 force_reprocess=True, dependencies=dependencies, fault=crash)
 
     served = _served(env)
@@ -81,16 +81,16 @@ def test_crash_after_commit_step_keeps_previous_release_until_reconciled(tmp_pat
 def test_next_run_after_crash_reconciles_and_publishes_exactly_one_release(tmp_path: Path, monkeypatch) -> None:
     env = make_env(tmp_path, monkeypatch)
     dependencies = env.dependencies()
-    run_one(env.settings, OVERPASS, parameters=env.parameters, products=env.products, dependencies=dependencies)
+    run_one(env.settings, OVERPASS, **env.configs(), dependencies=dependencies)
 
     def crash(name: str) -> None:
         if name == "release_dir":
             raise Crash(name)
 
     with pytest.raises(Crash):
-        run_one(env.settings, OVERPASS, parameters=env.parameters, products=env.products,
+        run_one(env.settings, OVERPASS, **env.configs(),
                 force_reprocess=True, dependencies=dependencies, fault=crash)
-    final = run_one(env.settings, OVERPASS, parameters=env.parameters, products=env.products,
+    final = run_one(env.settings, OVERPASS, **env.configs(),
                     force_reprocess=True, dependencies=dependencies)
 
     assert _served(env) == [final.release_id]
@@ -99,7 +99,7 @@ def test_next_run_after_crash_reconciles_and_publishes_exactly_one_release(tmp_p
 
 def test_broken_state_is_refused(tmp_path: Path, monkeypatch) -> None:
     env = make_env(tmp_path, monkeypatch)
-    result = run_one(env.settings, OVERPASS, parameters=env.parameters, products=env.products, dependencies=env.dependencies())
+    result = run_one(env.settings, OVERPASS, **env.configs(), dependencies=env.dependencies())
     shutil.rmtree(result.release_dir)
 
     with pytest.raises(ReconcileError, match="missing"):

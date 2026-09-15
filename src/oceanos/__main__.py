@@ -22,6 +22,8 @@ from oceanos.config import (
     load_acolite_parameter_set,
     load_config,
     load_product_set,
+    load_publication_profile,
+    load_quality_policy,
 )
 from oceanos.ingestion import AcquisitionError, acquire_scene
 from oceanos.ingestion.cdse_auth import CdseTokenClient
@@ -31,6 +33,7 @@ from oceanos.pipeline.plan import (
     group_overpasses,
     select_minimal_cover_with_scenes,
 )
+from oceanos.pipeline.republish import overpasses_in_range, republish
 from oceanos.pipeline.run_one import (
     PipelineError,
     check_releases,
@@ -38,6 +41,7 @@ from oceanos.pipeline.run_one import (
     run_one,
 )
 from oceanos.processing.grid import DeliveryGrid, build_delivery_grid
+from oceanos.processing.masks import AnalysisMaskError
 from oceanos.publishing import ReconcileError
 from oceanos.storage import StorageLayout, WriterLockedError
 
@@ -93,6 +97,11 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--overpass", required=True)
     run.add_argument("--force-reprocess", action="store_true")
     run.add_argument("--config", type=Path, default=Path("configs/mvp.yaml"))
+    again = pipeline_commands.add_parser("republish", help="Re-enter at P5 from the archive after a downstream change")
+    target = again.add_mutually_exclusive_group(required=True)
+    target.add_argument("--observation", help="Overpass id (or <aoi_id>/<overpass_id>) of the configured AOI")
+    target.add_argument("--range", nargs=2, metavar=("START", "END"), help="Observation dates, inclusive")
+    again.add_argument("--config", type=Path, default=Path("configs/mvp.yaml"))
     latest = pipeline_commands.add_parser("latest-release", help="Print the current release directory")
     latest.add_argument("--overpass", required=True)
     latest.add_argument("--config", type=Path, default=Path("configs/mvp.yaml"))
@@ -145,6 +154,14 @@ def _layout(settings) -> StorageLayout:
         raw=storage.raw, work=storage.work, archive=storage.archive, products=storage.products,
         superseded=storage.superseded, state=storage.state,
     )
+
+
+def _downstream_configs(config: Path):
+    parameters = load_acolite_parameter_set(config.parent / "acolite_parameters.yaml")
+    products = load_product_set(config.parent / "products.yaml", parameters)
+    policy = load_quality_policy(config.parent / "quality.yaml", products)
+    publication = load_publication_profile(config.parent / "publication.yaml", products)
+    return parameters, products, policy, publication
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -231,13 +248,26 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"Input set: {selected_input.input_set_id}; scenes: {len(selected_input.scenes)}")
         elif args.command == "pipeline" and args.pipeline_command == "run-one":
             settings = load_config(args.config)
-            parameters = load_acolite_parameter_set(args.config.parent / "acolite_parameters.yaml")
-            products = load_product_set(args.config.parent / "products.yaml", parameters)
+            parameters, products, policy, publication = _downstream_configs(args.config)
             result = run_one(
-                settings, args.overpass, parameters=parameters, products=products,
-                force_reprocess=args.force_reprocess,
+                settings, args.overpass, parameters=parameters, products=products, policy=policy,
+                publication=publication, force_reprocess=args.force_reprocess,
             )
-            print(f"{result.status.capitalize()}: {result.release_id}; run key: {result.run_key}; {result.release_dir}")
+            visibility = f"; visibility: {result.visibility}" if result.visibility else ""
+            print(f"{result.status.capitalize()}: {result.release_id}; run key: {result.run_key}{visibility}; {result.release_dir}")
+        elif args.command == "pipeline" and args.pipeline_command == "republish":
+            settings = load_config(args.config)
+            _, products, policy, publication = _downstream_configs(args.config)
+            if args.observation is not None:
+                targets = [args.observation.rsplit("/", 1)[-1]]
+            else:
+                start, end = _dates(*args.range)
+                targets = overpasses_in_range(settings, start, end)
+            for overpass_id in targets:
+                outcome = republish(settings, overpass_id, products=products, policy=policy, publication=publication)
+                print(f"{overpass_id}: {outcome.status}; {outcome.release_id}; visibility: {outcome.visibility}")
+            if not targets:
+                print("0 observations in range.")
         elif args.command == "pipeline" and args.pipeline_command == "latest-release":
             settings = load_config(args.config)
             print(latest_release_dir(settings, args.overpass))
@@ -253,7 +283,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             else:
                 _print_scenes(catalog.search_local_catalog())
     except (
-        AcquisitionError, AOIError, ConfigurationError, LocalCatalogError, PipelineError, ReconcileError,
+        AcquisitionError, AnalysisMaskError, AOIError, ConfigurationError, LocalCatalogError, PipelineError, ReconcileError,
         SceneProviderError, SelectionError, WriterLockedError, OSError, ValueError,
     ) as exc:
         parser.exit(1, f"Error: {exc}\n")

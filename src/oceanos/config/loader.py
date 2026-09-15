@@ -10,7 +10,12 @@ import yaml
 from pydantic import ValidationError
 
 from oceanos.config.models import OceanosSettings
-from oceanos.domain import AcoliteParameterSet, ProductSet
+from oceanos.domain import (
+    AcoliteParameterSet,
+    ProductSet,
+    PublicationProfile,
+    QualityPolicy,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -99,3 +104,33 @@ def load_product_set(path: str | Path, parameters: AcoliteParameterSet) -> Produ
             f"ProductSpec acolite_parameter outside AcoliteParameterSet: {outside}"
         )
     return products
+
+
+def load_quality_policy(path: str | Path, products: ProductSet) -> QualityPolicy:
+    """Load the versioned quality policy; every range rule must name a known product."""
+    resolved, values = _load_yaml_mapping(path)
+    try:
+        policy = QualityPolicy.model_validate(values)
+    except ValidationError as exc:
+        raise ConfigurationError(f"Invalid configuration in {resolved}: {exc}") from exc
+    known = {spec.product_key for spec in products.specs}
+    unknown = sorted({rule.product_key for rule in policy.range_rules} - known)
+    if unknown:
+        raise ConfigurationError(f"QualityPolicy range rules name unknown products: {unknown}")
+    return policy
+
+
+def load_publication_profile(path: str | Path, products: ProductSet) -> PublicationProfile:
+    """Load the publication profile; published products must be COG specs of the product set."""
+    resolved, values = _load_yaml_mapping(path)
+    try:
+        profile = PublicationProfile.model_validate(values)
+    except ValidationError as exc:
+        raise ConfigurationError(f"Invalid configuration in {resolved}: {exc}") from exc
+    cog = {spec.product_key for spec in products.specs if spec.publish == "cog"}
+    outside = sorted(set(profile.published_products) - cog)
+    if outside:
+        raise ConfigurationError(f"PublicationProfile publishes products that are not COG specs: {outside}")
+    if "true_colour" in profile.published_products and (profile.true_colour is None or profile.display is None):
+        raise ConfigurationError("PublicationProfile publishes true_colour without a true_colour spec and display COG profile")
+    return profile

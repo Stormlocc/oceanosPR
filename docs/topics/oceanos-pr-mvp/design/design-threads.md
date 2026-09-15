@@ -632,3 +632,40 @@ Downstream changes re-enter at P5 from the archive, with no ACOLITE run and no S
 
 **Decision.** After Phase 3's real-scene probe, the user (or a researcher) reviews scene A's COGs,
 flags and quality verdict before Phase 4. This is PRD rollout step 2.
+
+### DA-3 / DA-2 — Phase 3 values · **resolved with the user (2026-09-15)**
+
+Research artifact: `.work/oceanos-pr-mvp/bathymetry-research/RESEARCH.md` (memory tier, not committed).
+Measurements: `.work/oceanos-pr-mvp/spikes/phase3_measurements.json` (`measure_phase3.py`).
+
+- **Bathymetry dataset.** NOAA NCEI CUDEM 1/9 arc-second Puerto Rico, version 2022v2, tiles
+  `ncei19_n18x00_w067x00`, `n18x00_w067x25`, `n18x25_w067x00`, `n18x25_w067x25`. Public domain,
+  NAD83 + PRVD02 height (≈ local MSL, San Juan 1983–2001; decimetric offset, irrelevant to the cut),
+  no nodata over the AOI, AOI water depth p50 12.9 m, max ≈ 25 m. NCEI publishes no checksum:
+  `scripts/fetch_bathymetry.sh` pins SHA-256 values measured from the S3 PDS and the Digital Coast
+  mirror. Rejected: CRM Vol.9 (3″ ≈ 90 m, mixed datums), NCCOS 2006 LADS lidar (older, 4 m), no USGS
+  CoNED TBDEM for Puerto Rico.
+- **Shallow exclusion 7 m** for `tur_nechad2016`, `spm_nechad2016`, `chl_re_gons740`; none for
+  `fai`, `fait`, `ndvi`. Basis: scene A median turbidity inflates above ~5 m (29 FNU at 0–1 m, 5.2 at
+  3–5 m, plateau ≈ 4.3 from 5 m) and two-way pure-water attenuation at 665 nm leaves ≈ 0.24 % at 7 m.
+  Analysis pixels: ≈ 902 k for the AOI.
+- **Residual-glint gates: strict** — `max_negative_rhos_fraction = 0.10`,
+  `max_residual_swir_rhow = 0.02` (clean scene G: 0.008 / 0.001; scene A: 0.20 / 0.052). Scene A is
+  therefore an unusable observation (restricted release); scene G is the usable review case.
+- **AOT550 ≤ 0.5**, aerosol models MOD1/MOD2 (A 0.28, G 0.055, D 0.63).
+- **`chl_re_gons740` is published** as a COG with a strong caveat: red-edge algorithm for productive
+  water, not reliable in clear oligotrophic reef water (medians ≈ 10–11 mg m⁻³ in A and G).
+
+### DA-1 amendment — land mask from CUDEM · **resolved with the user (2026-09-15, DA-6 review)**
+
+**Evidence.** GSHHG 2.3.7 level 1 is displaced ≈ 380 m south and ≈ 150 m west over La Parguera and
+simplifies the cays. Shifting the GSHHG mask raises agreement with CUDEM land (elevation ≤ 0 m
+boundary) from 93.5 % to 96.0 % and with scene-G NDVI land from 91.3 % to 94.3 %; unshifted it marks
+≈ 102 k water pixels (≈ 10 km²) as land and leaves ≈ 14 k land pixels unmasked. Review page and
+overlay: `.work/oceanos-pr-mvp/da6-review/`.
+
+**Decision.** `LandMask` v2 and the `AnalysisMask` v2 coastal buffer derive from the pinned CUDEM
+tiles: land = grid-averaged elevation > 0 m (PRVD02); the 150 m buffer is applied to that land.
+GSHHG is no longer read by the pipeline (the Phase 1 fetch script and probe check remain, pending
+Phase 7 clean-up). Water products are still NaN on land (T5 exception unchanged). The Phase 1 fixture
+window now has 539 land pixels (GSHHG: 3434) and 58 481 water pixels outside the buffer (GSHHG: 53 750).

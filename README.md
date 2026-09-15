@@ -3,7 +3,7 @@
 OCEANOS PR prepara productos costeros Sentinel-2 para el área de La Parguera. La implementación
 actual publica una observación de extremo a extremo: descubrimiento L1C, selección de cobertura,
 adquisición íntegra del SAFE, ACOLITE verificado, archivo, conformidad a la grilla de entrega y una
-release inmutable con STAC derivado. La política de calidad aún no existe (Fase 3).
+release inmutable con STAC derivado, con veredicto de calidad, máscaras de análisis y procedencia completa.
 
 ## Área de interés y grilla de entrega
 
@@ -198,6 +198,50 @@ scripts/probe_run_one.sh
 ```
 
 Los esquemas STAC usados para validar están vendorizados en `tests/fixtures/stac-schemas/`.
+
+## Fase 3: calidad, máscaras, set completo de productos y procedencia
+
+La configuración científica vive en tres archivos versionados, cada umbral con su base escrita:
+
+- `configs/products.yaml` (`ProductSet` v1): publica como COG `tur_nechad2016`, `spm_nechad2016`,
+  `chl_re_gons740`, `fai`, `fait`, `ndvi`, `l2_flags` y `true_colour`; `rhow_*`, `Rrs_*` y
+  `rhorc_*` quedan solo en el archivo. Cada producto declara unidad, rangos, corte somero y caveat.
+- `configs/quality.yaml` (`QualityPolicy` v1): fracción válida mínima 0.20, cobertura 0.95,
+  dilatación de nubes 3 px, AOT550 ≤ 0.5 (MOD1/MOD2), rhos negativo ≤ 10 %, rhow SWIR p90 ≤ 0.02,
+  buffer costero 150 m y reglas de rango.
+- `configs/publication.yaml` (`PublicationProfile` v1): perfiles COG y el color verdadero (B04/B03/B02
+  de rhos, estiramiento fijo 0–0.25 con gamma 2 para todas las fechas).
+
+**Máscaras.** La máscara de análisis (solo para estadísticas) excluye tierra más 150 m de costa y, en
+turbidez, SPM y clorofila, el agua con profundidad menor de 7 m según NOAA CUDEM 1/9″ Puerto Rico
+(2022v2). `fai`, `fait` y `ndvi` no tienen corte somero. Si algún producto queda con menos de 10 000
+píxeles de análisis, el pipeline se detiene para una decisión del usuario.
+
+```bash
+scripts/fetch_bathymetry.sh          # 4 tiles con SHA-256 fijados
+scripts/fetch_bathymetry.sh --check
+```
+
+**Veredicto (P6).** Un píxel es válido si no tiene cirrus ni TOA alto (dilatados), ni rhos negativo, ni
+está fuera de escena; el bit 0 (umbral SWIR) es informativo. Los gates se aplican en orden: ancilares
+por defecto, cobertura, aerosol, glint residual, rangos y fracción válida por producto sobre sus
+píxeles de análisis. `chl_re_gons740` informa pero no decide, porque ACOLITE lo enmascara internamente.
+El ángulo de glint lo calcula OCEANOS desde la geometría del L2R y solo se registra.
+
+**Releases.** Una observación usable publica los 8 COG; una no usable publica una release
+restringida con `true_colour` y `l2_flags`. Toda release incluye `quality.json`, `series.json`
+(filas de la zona AOI completa, con huecos como filas sin estadísticas) y `provenance.json` con
+escenas, ACOLITE, perfiles, ancilares, máscaras, derivaciones y `scientific_label`.
+
+**Re-publicación sin ACOLITE (DA-4).** Un cambio en productos, calidad, máscaras o publicación crea un
+`ReleaseId` nuevo desde el NetCDF archivado, sin descargar ni reprocesar:
+
+```bash
+uv run oceanospr pipeline republish --observation S2A_20260702T150741_R082
+uv run oceanospr pipeline republish --range 2026-07-01 2026-07-31
+```
+
+El probe real acepta `--force-reprocess` y otra escena de la Fase 1 con `SCENES`/`SCENE_KEY`.
 
 La prueba del catálogo CDSE real es opt-in:
 

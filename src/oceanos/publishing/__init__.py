@@ -1,6 +1,6 @@
 """COG packaging, derived STAC and immutable release publication."""
 
-from oceanos.publishing.cog import BITFIELD_COG, CONTINUOUS_COG, write_cog
+from oceanos.publishing.cog import BITFIELD_COG, CONTINUOUS_COG, DISPLAY_COG, write_cog
 from oceanos.publishing.release import (
     ReconcileError,
     ReconcileReport,
@@ -11,9 +11,10 @@ from oceanos.publishing.release import (
     release_ledger,
 )
 from oceanos.publishing.stac import build_item, item_path, read_item
+from oceanos.publishing.true_colour import write_true_colour
 
 __all__ = [
-    "BITFIELD_COG", "CONTINUOUS_COG", "ReconcileError", "ReconcileReport", "ReleaseLedger",
+    "BITFIELD_COG", "CONTINUOUS_COG", "DISPLAY_COG", "ReconcileError", "ReconcileReport", "ReleaseLedger",
     "build_item", "current_release_id", "item_path", "publish_release", "read_item",
-    "reconcile", "release_ledger", "write_cog",
+    "reconcile", "release_ledger", "write_cog", "write_true_colour",
 ]

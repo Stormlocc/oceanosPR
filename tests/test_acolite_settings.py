@@ -66,9 +66,10 @@ def test_mvp_loads_pinned_acolite_and_versioned_product_configs() -> None:
     assert settings.acolite.timeout_seconds == 1_200
     assert parameters.version == "1"
     assert parameters.parameters == PARAMETERS
-    assert [(spec.product_key, spec.publish) for spec in products.specs] == [
-        ("tur_nechad2016", "cog"), ("l2_flags", "cog"),
+    assert [spec.product_key for spec in products.specs if spec.publish == "cog"] == [
+        "tur_nechad2016", "spm_nechad2016", "chl_re_gons740", "fai", "fait", "ndvi", "l2_flags", "true_colour",
     ]
+    assert {spec.product_key for spec in products.specs if spec.publish == "archive_only"} == {"rhow", "rrs", "rhorc"}
 
 
 def test_product_config_rejects_parameter_outside_render_set(tmp_path: Path) -> None:

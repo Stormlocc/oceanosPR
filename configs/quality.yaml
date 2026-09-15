@@ -1,0 +1,48 @@
+schema_version: "1.0"
+version: "1"
+# Fraction of each gating product's analysis pixels that must be valid (DA-2, B7).
+min_valid_fraction: 0.20
+min_grid_coverage: 0.95
+cloud_dilation_px: 3
+aot550_max: 0.5
+allowed_aerosol_models:
+  - "ACOLITE-LUT-202110-MOD1"
+  - "ACOLITE-LUT-202110-MOD2"
+max_negative_rhos_fraction: 0.10
+max_residual_swir_rhow: 0.02
+reject_on_ancillary_fallback: true
+coastal_buffer_m: 150
+min_analysis_pixels: 10000
+range_rules:
+  - product_key: "tur_nechad2016"
+    min: 0
+    max: 100
+    max_offending_fraction: 0.05
+  - product_key: "spm_nechad2016"
+    min: 0
+    max: 100
+    max_offending_fraction: 0.05
+  - product_key: "chl_re_gons740"
+    min: 0
+    max: 100
+    max_offending_fraction: 0.05
+  - product_key: "fai"
+    min: -0.1
+    max: 0.1
+    max_offending_fraction: 0.05
+  - product_key: "ndvi"
+    min: -1
+    max: 1
+    max_offending_fraction: 0.01
+basis:
+  source: ".work/oceanos-pr-mvp/spikes/phase3_measurements.json (measure_phase3.py): runs F (scene A 2026-07-02), G (2026-01-06), D2 (scene D 2026-07-05, cloudy), B2 (2026-09-13); water outside the 150 m buffer, 7 m cut for tur/spm/chl"
+  min_valid_fraction: "PLAN DA-2 value; D2 0.05 and B2 0.00 fail, F 0.77 and G 0.99 pass"
+  min_grid_coverage: "the AOI lies inside tile 19QGV; every spike run has coverage 1.0, so any loss means missing data"
+  cloud_dilation_px: "30 m margin for cloud edges and adjacency on top of ACOLITE's sigma-3 TOA smoothing; D2 cloud 0.90 -> 0.94 dilated"
+  aot550_max: "user decision 2026-09-15: accepts moderate Saharan dust (F 0.28, G 0.055), rejects D2 0.63"
+  allowed_aerosol_models: "models observed in valid runs (MOD1 in G, MOD2 in F, D2, B2)"
+  max_negative_rhos_fraction: "user decision 2026-09-15 (strict): clean G 0.008; F 0.20 is rejected"
+  max_residual_swir_rhow: "user decision 2026-09-15 (strict): p90 of water rhow at ~1610 nm; clean G 0.001; F 0.052 is rejected"
+  coastal_buffer_m: "PLAN D-2, midpoint of the Brief's 100-200 m"
+  min_analysis_pixels: "PLAN guard; AOI has ~902k analysis pixels at the 7 m cut"
+  range_rules: "physical plausibility guards against correction failure: F p99 tur 34 FNU, spm 32 g m-3, chl 76 mg m-3, fai +/-0.03; chl rule is reported but does not gate (ACOLITE masks chl internally)"
