@@ -1,8 +1,5 @@
 project_name: "NASA OCEANOS Puerto Rico"
 data_root: "data"
-raw_dir: "raw"
-intermediate_dir: "intermediate"
-products_dir: "products"
 # Component paths resolve from data_root; this puts STAC at catalog/catalog.json.
 catalog_dir: "../catalog"
 default_crs: "EPSG:4326" # mide en grados (esfera)
@@ -13,19 +10,24 @@ aoi:
   path: "configs/aoi/la_parguera_mvp.geojson"
   target_crs: "EPSG:32619" #mide en metros (plano) zona 19N
 
-# Metadata discovery only; asset URLs are listed but never downloaded.
+# Fixed Sentinel-2 L1C discovery and whole-SAFE acquisition through CDSE.
 scenes:
-  catalog_url: "https://earth-search.aws.element84.com/v1"
-  collection: "sentinel-2-l2a"
+  provider: "cdse"
+  catalogue_url: "https://catalogue.dataspace.copernicus.eu/odata/v1"
+  download_url: "https://download.dataspace.copernicus.eu/odata/v1"
+  identity_url: "https://identity.dataspace.copernicus.eu/auth/realms/CDSE"
   cloud_cover_max: null
   timeout: 30
   max_retries: 2
   page_size: 100
 
-# Resolution and buffer in metres; categorical inputs always use nearest.
-normalization:
-  target_resolution: 10
-  buffer_m: 0
-  reference_band: "B02"
-  continuous_resampling: "bilinear"
-  warp_memory_limit_mb: 64
+# Tier roots resolve from data_root. Work/archive/products share a filesystem.
+storage:
+  raw: "raw"
+  work: "work"
+  archive: "archive"
+  products: "products"
+  superseded: "superseded"
+  state: "state"
+  failed_workspace_retention_days: 14
+  superseded_releases_to_keep: 1

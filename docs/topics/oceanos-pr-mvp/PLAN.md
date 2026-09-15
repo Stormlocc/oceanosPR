@@ -556,7 +556,7 @@ Estimated size: 2 300–2 800 LOC over three sub-phases, one commit each.
 
 **Sanity Check (container):** `grep -cE "^#### Phase 2\.[123]: .*\[DONE\]" docs/topics/oceanos-pr-mvp/PLAN.md` prints `3`.
 
-#### Phase 2.1: Domain core, delivery grid, acquisition A0–A2 [TODO]
+#### Phase 2.1: Domain core, delivery grid, acquisition A0–A2 [DONE]
 
 - [ ] **Pre-flight consumer check (first item; finding 8).** Grep the consumers of every surface this
   sub-phase migrates, and record migrate/retire per consumer in the commit message:

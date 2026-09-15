@@ -71,7 +71,7 @@ def test_empty_catalog_and_creation(tmp_path):
     root = pystac.Catalog.from_file(str(catalog.path))
     collections = list(root.get_collections())
     assert len(collections) == 1
-    assert collections[0].id == "sentinel-2-l2a"
+    assert collections[0].id == "sentinel-2-l1c"
     assert list(collections[0].get_items()) == []
     validate_core_documents(catalog.directory)
 

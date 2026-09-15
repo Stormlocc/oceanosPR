@@ -51,45 +51,43 @@ class AOISettings(BaseModel):
 
 
 class SceneSearchSettings(BaseModel):
-    """STAC discovery defaults; configurable without changing provider code."""
+    """Fixed CDSE L1C discovery and acquisition endpoints."""
 
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
-    catalog_url: str = "https://earth-search.aws.element84.com/v1"
-    collection: str = Field(default="sentinel-2-l2a", min_length=1)
+    provider: Literal["cdse"] = "cdse"
+    catalogue_url: str = "https://catalogue.dataspace.copernicus.eu/odata/v1"
+    download_url: str = "https://download.dataspace.copernicus.eu/odata/v1"
+    identity_url: str = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE"
     cloud_cover_max: float | None = Field(default=None, ge=0, le=100)
     timeout: float = Field(default=30, gt=0)
     max_retries: int = Field(default=2, ge=0, le=5)
     page_size: int = Field(default=100, ge=1, le=10000)
 
-    @field_validator("catalog_url")
+    @field_validator("catalogue_url", "download_url", "identity_url")
     @classmethod
-    def catalog_root(cls, value: str) -> str:
+    def http_root(cls, value: str) -> str:
         from urllib.parse import urlsplit
 
         parsed = urlsplit(value)
         if parsed.scheme not in ("http", "https") or not parsed.netloc or parsed.query or parsed.fragment:
-            raise ValueError("catalog_url must be an HTTP(S) catalog root URL without query or fragment")
+            raise ValueError("endpoint must be an HTTP(S) root URL without query or fragment")
         return value.rstrip("/")
 
-    @field_validator("collection")
-    @classmethod
-    def collection_name(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("collection must not be blank")
-        return value.strip()
 
+class StorageSettings(BaseModel):
+    """Tier roots relative to data_root and retention policy values."""
 
-class NormalizationSettings(BaseModel):
-    """Spatial-only normalization in the AOI's projected, metric target CRS."""
+    model_config = ConfigDict(extra="forbid")
 
-    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
-
-    target_resolution: float = Field(default=10, gt=0)
-    buffer_m: float = Field(default=0, ge=0)
-    reference_band: Literal["B02", "B03", "B04", "B08"] = "B02"
-    continuous_resampling: Literal["nearest", "bilinear"] = "bilinear"
-    warp_memory_limit_mb: int = Field(default=64, gt=0)
+    raw: Path = Path("raw")
+    work: Path = Path("work")
+    archive: Path = Path("archive")
+    products: Path = Path("products")
+    superseded: Path = Path("superseded")
+    state: Path = Path("state")
+    failed_workspace_retention_days: int = Field(default=14, ge=0)
+    superseded_releases_to_keep: int = Field(default=1, ge=0)
 
 
 class OceanosSettings(BaseSettings):
@@ -108,14 +106,11 @@ class OceanosSettings(BaseSettings):
 
     project_name: str
     data_root: Path
-    raw_dir: Path
-    intermediate_dir: Path
-    products_dir: Path
     catalog_dir: Path
     default_crs: str
     aoi: AOISettings
     scenes: SceneSearchSettings = Field(default_factory=SceneSearchSettings)
-    normalization: NormalizationSettings = Field(default_factory=NormalizationSettings)
+    storage: StorageSettings = Field(default_factory=StorageSettings)
 
     @field_validator("project_name", "default_crs")
     @classmethod
@@ -153,10 +148,11 @@ class OceanosSettings(BaseSettings):
         return self.model_copy(
             update={
                 "data_root": data_root,
-                "raw_dir": self._resolve(self.raw_dir, data_root),
-                "intermediate_dir": self._resolve(self.intermediate_dir, data_root),
-                "products_dir": self._resolve(self.products_dir, data_root),
                 "catalog_dir": self._resolve(self.catalog_dir, data_root),
+                "storage": self.storage.model_copy(update={
+                    field: self._resolve(getattr(self.storage, field), data_root)
+                    for field in ("raw", "work", "archive", "products", "superseded", "state")
+                }),
                 "aoi": self.aoi.model_copy(
                     update={"path": self._resolve(self.aoi.path, resolved_base)}
                 ),

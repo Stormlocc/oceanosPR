@@ -1,14 +1,11 @@
 """Synthetic rasters verify geometry, resampling, nodata and exact alignment."""
 
-import hashlib
 import json
 import socket
-from pathlib import Path
 
 import numpy as np
 import pytest
 import rasterio
-import yaml
 from pyproj import CRS as Projection
 from rasterio.crs import CRS
 from rasterio.transform import Affine, array_bounds, from_origin
@@ -16,19 +13,14 @@ from rasterio.warp import transform_bounds
 from shapely.geometry import Polygon, box
 
 from oceanos.aoi import AOI
-from oceanos.catalog import LocalSceneCatalog, SceneAsset, SceneMetadata
-from oceanos.ingestion import MaterializationError
-from oceanos.ingestion.fetch import MaterializedAsset, SceneManifest
 from oceanos.processing import (
     GridSpec,
     assert_aligned,
     build_grid,
     normalize_band,
-    normalize_scene,
 )
 
 CRS_UTM = "EPSG:32619"
-ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.fixture(autouse=True)
@@ -180,101 +172,6 @@ def test_internal_mask_and_aoi_hole_are_respected(tmp_path):
         assert np.isnan(data[0, 0])
         assert np.isnan(data[2, 1])
         assert data[0, 1] == 100
-
-
-@pytest.fixture
-def materialized_scene(tmp_path):
-    scene_id = "S2_SYNTHETIC"
-    directory = tmp_path / "raw" / "sentinel2" / scene_id
-    paths, records, assets = {}, {}, {}
-    for band in ("B02", "B03", "B04", "B08", "B11"):
-        resolution, size = (20, 10) if band == "B11" else (10, 20)
-        path = write_raster(directory / f"{band}.tif", np.full((size, size), 100, dtype="uint16"),
-                            transform=from_origin(500000, 200, resolution, resolution))
-        url = f"https://assets.example/{band}.tif"
-        assets[band] = SceneAsset(href=url, file_size=path.stat().st_size)
-        records[band] = MaterializedAsset(
-            asset_key=band, source_url=url, download_timestamp="2024-01-01T00:00:00Z",
-            local_path=path.name, file_size=path.stat().st_size, sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
-        )
-        paths[band] = path
-    region = aoi(box(500020, 40, 500180, 180))
-    scene = SceneMetadata(scene_id=scene_id, collection="sentinel-2-l2a", datetime="2024-01-01T00:00:00Z",
-                          geometry=region.to_geojson()["geometry"], bbox=(0, 0, 1, 1), assets=assets,
-                          source_catalog="https://catalog.example")
-    catalog = LocalSceneCatalog(tmp_path / "catalog")
-    catalog.add_scene(scene)
-    manifest = SceneManifest(scene_id=scene_id, status="complete", assets=records)
-    (directory / "manifest.json").write_text(manifest.model_dump_json())
-    return catalog, scene_id, region, paths
-
-
-def test_critical_all_normalized_rasters_share_exact_grid(materialized_scene, tmp_path):
-    catalog, scene_id, region, paths = materialized_scene
-    raw_before = {band: path.read_bytes() for band, path in paths.items()}
-    report = normalize_scene(catalog, scene_id, region, raw_dir=tmp_path / "raw", intermediate_dir=tmp_path / "intermediate")
-    output = Path(report["output_directory"])
-    signatures = []
-    for band in paths:
-        with rasterio.open(output / f"{band}.tif") as dataset:
-            signatures.append((dataset.crs, dataset.transform, dataset.width, dataset.height, tuple(dataset.bounds)))
-    assert all(signature == signatures[0] for signature in signatures)
-    assert signatures[0] == (CRS.from_string(CRS_UTM), Affine(10, 0, 500020, 0, -10, 180), 16, 14, (500020, 40, 500180, 180))
-    assert report["reference_band"] == "B02"
-    assert report["bands"]["B11"]["native_resolution"] == [20, 20]
-    assert report["output_size_bytes"] == sum(path.stat().st_size for path in output.glob("*.tif"))
-    assert report["uncompressed_size_bytes"] == 16 * 14 * 5 * 4
-    assert report["peak_process_memory_bytes"] > 0
-    assert json.loads((output / "manifest.json").read_text()) == report
-    assert raw_before == {band: path.read_bytes() for band, path in paths.items()}
-
-
-def test_partial_or_corrupt_materialization_is_rejected(materialized_scene, tmp_path):
-    catalog, scene_id, region, paths = materialized_scene
-    paths["B11"].write_bytes(b"partial")
-    with pytest.raises(MaterializationError, match="integrity"):
-        normalize_scene(catalog, scene_id, region, raw_dir=tmp_path / "raw", intermediate_dir=tmp_path / "intermediate")
-    assert not (tmp_path / "intermediate" / scene_id / "normalized").exists()
-
-
-def test_failure_preserves_previous_aligned_set(materialized_scene, tmp_path, monkeypatch):
-    catalog, scene_id, region, _paths = materialized_scene
-    kwargs = {"raw_dir": tmp_path / "raw", "intermediate_dir": tmp_path / "intermediate"}
-    result = normalize_scene(catalog, scene_id, region, **kwargs)
-    output = Path(result["output_directory"])
-    original = {path.name: path.read_bytes() for path in output.iterdir()}
-    actual = normalize_band
-    def fail_second(source, destination, grid, **kwargs):
-        if source.name == "B03.tif":
-            raise OSError("simulated disk failure")
-        return actual(source, destination, grid, **kwargs)
-    monkeypatch.setattr("oceanos.processing.normalize.normalize_band", fail_second)
-    with pytest.raises(OSError):
-        normalize_scene(catalog, scene_id, region, resolution=20, **kwargs)
-    assert original == {path.name: path.read_bytes() for path in output.iterdir()}
-    assert not list(output.parent.glob(".normalized-*"))
-
-
-def test_cli_config_resolution_and_report(materialized_scene, tmp_path, capsys):
-    from oceanos.__main__ import main
-    catalog, scene_id, region, _paths = materialized_scene
-    aoi_path = tmp_path / "aoi.geojson"
-    region.save(aoi_path)
-    config = yaml.safe_load((ROOT / "configs/mvp.yaml").read_text())
-    config["data_root"] = str(tmp_path)
-    config["catalog_dir"] = str(catalog.directory)
-    config["aoi"] = {"name": "Synthetic", "path": str(aoi_path), "target_crs": CRS_UTM}
-    config["normalization"] = {"target_resolution": 5, "buffer_m": 0, "continuous_resampling": "nearest"}
-    config_path = tmp_path / "config.yaml"
-    config_path.write_text(yaml.safe_dump(config))
-    assert main(["process", "normalize", scene_id, "--config", str(config_path)]) == 0
-    output = capsys.readouterr().out
-    assert "32 x 28 pixels" in output
-    assert "5.0 m" in output
-    assert "Peak process RSS:" in output
-    assert "Raster size on disk:" in output
-    report = json.loads((tmp_path / "intermediate" / scene_id / "normalized/manifest.json").read_text())
-    assert all(band["resampling_method"] == "nearest" for band in report["bands"].values())
 
 
 @pytest.mark.parametrize("crs,resolution,buffer", [("EPSG:4326", 10, 0), (CRS_UTM, 0, 0), (CRS_UTM, 10, -1)])

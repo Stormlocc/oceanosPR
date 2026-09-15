@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import json
 import math
+import re
+import unicodedata
 from dataclasses import dataclass
+from hashlib import sha256
 from pathlib import Path
 
 from pyproj import CRS, Transformer
@@ -28,6 +31,11 @@ class AOI:
     geometry: BaseGeometry
     crs: CRS
 
+    @property
+    def aoi_id(self) -> str:
+        """Return the stable id of the named EPSG:4326 GeoJSON boundary."""
+        return derive_aoi_id(self)
+
     def to_geojson(self) -> dict:
         """Return an RFC 7946 Feature in WGS84 longitude/latitude.
 
@@ -47,6 +55,26 @@ class AOI:
             json.dumps(self.to_geojson(), indent=2, allow_nan=False) + "\n",
             encoding="utf-8",
         )
+
+
+def derive_aoi_id(aoi: AOI) -> str:
+    """Hash canonical WGS84 GeoJSON while keeping a readable name slug."""
+    validate_aoi(aoi)
+    def canonicalize(value):
+        if isinstance(value, float):
+            return round(value, 12)
+        if isinstance(value, (list, tuple)):
+            return [canonicalize(item) for item in value]
+        if isinstance(value, dict):
+            return {key: canonicalize(item) for key, item in value.items()}
+        return value
+    canonical = json.dumps(
+        canonicalize(aoi.to_geojson()), sort_keys=True, separators=(",", ":"),
+        ensure_ascii=False, allow_nan=False,
+    ).encode("utf-8")
+    ascii_name = unicodedata.normalize("NFKD", aoi.name).encode("ascii", "ignore").decode("ascii")
+    slug = re.sub(r"[^a-z0-9]+", "-", ascii_name.lower()).strip("-") or "aoi"
+    return f"aoi-{slug}-{sha256(canonical).hexdigest()[:12]}"
 
 
 def validate_aoi(aoi: AOI) -> bool:
