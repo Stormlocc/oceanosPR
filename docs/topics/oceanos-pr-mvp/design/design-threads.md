@@ -371,7 +371,7 @@ V8 remedy evidence (Runs F/G, 2026-09-14, pin `20260421.0`):
 - **E2.** `~/acolite/data/LUT` was empty (SUMMARY §8). **Resolved:** LUT retrieval and environment
   check pass.
 - **E3.** GSHHG was not downloaded (SUMMARY §8). **Resolved:** the pinned OCEANOS-owned archive is
-  present and `scripts/fetch_gshhg.sh --check` passes.
+  present and `scripts/fetch_reference_data.py gshhg --check` passes.
 - **E4.** The `version=20260421.0` line (Q15) was absent from deployment `config/config.txt`.
   **Resolved:** exactly one version line is present.
 
@@ -642,7 +642,7 @@ Measurements: `.work/oceanos-pr-mvp/spikes/phase3_measurements.json` (`measure_p
   `ncei19_n18x00_w067x00`, `n18x00_w067x25`, `n18x25_w067x00`, `n18x25_w067x25`. Public domain,
   NAD83 + PRVD02 height (≈ local MSL, San Juan 1983–2001; decimetric offset, irrelevant to the cut),
   no nodata over the AOI, AOI water depth p50 12.9 m, max ≈ 25 m. NCEI publishes no checksum:
-  `scripts/fetch_bathymetry.sh` pins SHA-256 values measured from the S3 PDS and the Digital Coast
+  `scripts/fetch_reference_data.py` pins SHA-256 values measured from the S3 PDS and the Digital Coast
   mirror. Rejected: CRM Vol.9 (3″ ≈ 90 m, mixed datums), NCCOS 2006 LADS lidar (older, 4 m), no USGS
   CoNED TBDEM for Puerto Rico.
 - **Shallow exclusion 7 m** for `tur_nechad2016`, `spm_nechad2016`, `chl_re_gons740`; none for

@@ -10,6 +10,41 @@ authoritative; this file records what they cannot.
   `Fase 3: calidad, máscaras, set completo de productos y procedencia`. DA-6 approved by the user.
 - **Next unit:** Phase 4 (index, orchestration, retention, bounded backfill). Not started.
 - **Untracked by design:** `.agents/`, `data/`, `.work/`.
+- **Operational scripts are Python.** The four `.sh` scripts were removed on 2026-09-15; see the
+  section below and PLAN.md, "Resolved after lock (operational scripts in Python)".
+
+## Script refactor (2026-09-15, outside the phase sequence)
+
+The user asked for the repository to hold no bash and for the operational entry points to be as
+simple as possible. This changed tooling only: no stage, contract, pinned value or acceptance
+criterion moved, and Phase 4 remains the next unit.
+
+| Removed | Replacement |
+| --- | --- |
+| `scripts/acolite_env.sh` | `scripts/acolite_env.py` (`--check` default, `--install`, `--dry-run`) |
+| `scripts/fetch_gshhg.sh` | `scripts/fetch_reference_data.py gshhg [--check]` |
+| `scripts/fetch_bathymetry.sh` | `scripts/fetch_reference_data.py bathymetry [--check]` |
+| `scripts/probe_run_one.sh` | `scripts/probe_run_one.py` (`--scenes` / `--scene-key` flags) |
+| `tests/test_phase1_scripts.py` | `tests/test_scripts.py` (no test spawns `bash`) |
+
+- The ACOLITE pin has one source, `configs/mvp.yaml`; `acolite_env.py --check` reuses
+  `InstallationProbe` and adds the clean-checkout rule, the `~/.netrc` mode and machines, and the
+  `environment.yml` import check. It creates nothing.
+- `probe_run_one.py` drives the CLI in process instead of spawning `uv run` five times.
+- `scripts/verify_release.py` and `scripts/make_acolite_fixtures.py` were not touched.
+
+**Verification of this refactor:**
+
+| Command | Result |
+| --- | --- |
+| `uv run pytest -q` | 230 passed |
+| `uv run ruff check src tests scripts` | clean |
+| `uv run mypy scripts/*.py src/oceanos` | only the pre-existing missing PyYAML stub, also reported for `config/loader.py:9` |
+| `uv run python scripts/acolite_env.py --check` | exit 0, pin `f73cbe73…`, 19 dependencies reported |
+| `uv run python scripts/fetch_reference_data.py all --check` | exit 0, GSHHG and the 4 CUDEM tiles match their pinned SHA-256 |
+
+The real probe was **not** re-run for this refactor: it downloads ~800 MB and runs ACOLITE. Records
+dated before 2026-09-15 name the former `.sh` paths and are left as written.
 
 ## Phase 3 closure record
 

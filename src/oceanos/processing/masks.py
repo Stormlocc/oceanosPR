@@ -59,7 +59,7 @@ def _tile_set_sha256(paths: list[Path]) -> str:
 
 def _require_tiles(bathymetry_paths: list[Path]) -> None:
     if not bathymetry_paths or any(not path.is_file() for path in bathymetry_paths):
-        raise FileNotFoundError("bathymetry tiles are missing; run scripts/fetch_bathymetry.sh")
+        raise FileNotFoundError("bathymetry tiles are missing; run scripts/fetch_reference_data.py bathymetry")
 
 
 def _write_grid_raster(path: Path, grid: DeliveryGrid, data: np.ndarray, dtype: str, nodata: float | None, **tags: str) -> None:

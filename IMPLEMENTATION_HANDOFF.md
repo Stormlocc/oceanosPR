@@ -55,6 +55,12 @@ The last full run reported `155 passed`; Ruff and all Phase 1 direct sanity
 checks passed. The default suite remains offline and does not require ACOLITE
 or network access.
 
+**The commands above name the shell scripts as they existed then.** On 2026-09-15 they were
+replaced by Python (PLAN.md, "Resolved after lock (operational scripts in Python)"):
+`scripts/acolite_env.sh --check` is now `uv run python scripts/acolite_env.py --check`, and
+`scripts/fetch_gshhg.sh --check` is now
+`uv run python scripts/fetch_reference_data.py gshhg --check`.
+
 ## Protected workspace state
 
 Do not stage, alter or discard `.agents/`; it remains untracked by PLAN rule.

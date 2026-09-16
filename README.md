@@ -96,9 +96,13 @@ ACOLITE queda fijado en la versión `20260421.0`, commit
 preparan previamente y GSHHG 2.3.7 se mantiene como dato de referencia propiedad de OCEANOS. Las
 credenciales de EarthData y CDSE permanecen exclusivamente en `~/.netrc`.
 
+Los puntos de entrada operacionales son scripts de Python; el repositorio no contiene bash.
+El pin (tag, commit y rutas) se lee de `configs/mvp.yaml`, nunca se redeclara en el script.
+
 ```bash
-scripts/acolite_env.sh --check
-scripts/fetch_gshhg.sh --check
+uv run python scripts/acolite_env.py --check          # solo lectura, no crea nada
+uv run python scripts/acolite_env.py --install        # clona el pin y descarga los LUT
+uv run python scripts/fetch_reference_data.py gshhg --check
 ```
 
 Los fixtures offline verificados están en `tests/fixtures/acolite/`. No contienen SAFEs ni
@@ -194,7 +198,7 @@ Verificación de una release y probe real (requiere red, CDSE, EarthData y ACOLI
 
 ```bash
 uv run python scripts/verify_release.py "$(uv run oceanospr pipeline latest-release --overpass S2A_20260702T150741_R082)"
-scripts/probe_run_one.sh
+uv run python scripts/probe_run_one.py
 ```
 
 Los esquemas STAC usados para validar están vendorizados en `tests/fixtures/stac-schemas/`.
@@ -218,8 +222,8 @@ turbidez, SPM y clorofila, el agua con profundidad menor de 7 m según NOAA CUDE
 píxeles de análisis, el pipeline se detiene para una decisión del usuario.
 
 ```bash
-scripts/fetch_bathymetry.sh          # 4 tiles con SHA-256 fijados
-scripts/fetch_bathymetry.sh --check
+uv run python scripts/fetch_reference_data.py bathymetry          # 4 tiles con SHA-256 fijados
+uv run python scripts/fetch_reference_data.py bathymetry --check
 ```
 
 **Veredicto (P6).** Un píxel es válido si no tiene cirrus ni TOA alto (dilatados), ni rhos negativo, ni
@@ -241,7 +245,7 @@ uv run oceanospr pipeline republish --observation S2A_20260702T150741_R082
 uv run oceanospr pipeline republish --range 2026-07-01 2026-07-31
 ```
 
-El probe real acepta `--force-reprocess` y otra escena de la Fase 1 con `SCENES`/`SCENE_KEY`.
+El probe real acepta `--force-reprocess` y otra escena de la Fase 1 con `--scenes`/`--scene-key`.
 
 La prueba del catálogo CDSE real es opt-in:
 

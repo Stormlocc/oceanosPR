@@ -198,6 +198,42 @@ resolved. The Brief is complete.*
       facets.
   - **OD5 unchanged.** The backfill stays 2026-06-01 → 2026-08-31.
 
+### Resolved after lock (operational scripts in Python, 2026-09-15)
+
+At the user's request the four shell scripts were replaced by Python, so the repository holds one
+language and the operational entry points stay maintainable. **No acceptance criterion, phase
+boundary, pinned value or architectural decision changed.**
+
+| Before | After |
+| --- | --- |
+| `scripts/acolite_env.sh [--check\|--dry-run]` | `uv run python scripts/acolite_env.py [--check\|--install\|--dry-run]` |
+| `scripts/fetch_gshhg.sh [--check]` | `uv run python scripts/fetch_reference_data.py gshhg [--check]` |
+| `scripts/fetch_bathymetry.sh [--check]` | `uv run python scripts/fetch_reference_data.py bathymetry [--check]` |
+| `scripts/probe_run_one.sh` | `uv run python scripts/probe_run_one.py` |
+
+- **The ACOLITE pin now has one source.** `release_tag`, `commit_sha`, the root, the interpreter,
+  the launcher, the LUT directory and `external_dir` all come from `configs/mvp.yaml`. The scripts
+  no longer re-declare them, and a test asserts those literals are absent from `acolite_env.py`.
+- **`--check` reuses `InstallationProbe`** (`oceanos/acolite/probe.py`) instead of reimplementing it,
+  and adds only what the probe does not cover: the clean-checkout rule (DA #17), `~/.netrc` at mode
+  600 with machines `earthdata` and `cdse`, and the importability plus version of every dependency
+  the tag's `environment.yml` declares (finding 25). It creates no directory and needs no
+  `micromamba run`: the configured interpreter is called directly.
+- **B12 is unchanged.** The GSHHG and CUDEM sizes and SHA-256 values stay pinned in the script and
+  are never computed from a downloaded file. Downloads stage to `.part`, are verified, and only then
+  replace the target; the GSHHG members are unpacked through a staging directory.
+- **Deliberate behaviour changes.** `acolite_env.py` with no argument *checks*; installing requires
+  `--install`. `probe_run_one.py` takes `--scenes` / `--scene-key` flags instead of the `SCENES` /
+  `SCENE_KEY` environment variables, and drives the CLI in process rather than spawning `uv run`.
+- **Tests.** `tests/test_phase1_scripts.py` became `tests/test_scripts.py`; no test spawns `bash`.
+- **Records dated before 2026-09-15 name the former `.sh` paths.** They are left as written, because
+  they record what was executed at the time.
+- **Phase 7 follow-through.** Its planned `scripts/oceanos-update.sh` becomes `oceanos_update.py`,
+  and its Sanity Check drops `bash -n`. Its retire list item `src/oceanos/composites/` was completed
+  here: the package held one docstring, had no importer, and belonged to the rejected in-house
+  composites. `catalog/sentinel2.py`, `tests/test_scenes.py` and `build_grid` are **not** touched;
+  they still have consumers and their retirement stays a Phase 7 unit behind the OD2 gate.
+
 ## Plan
 
 **Status:** APPROVED FOR IMPLEMENTATION 2026-09-14 (rev 4, final; user: "aprobado") · produced by `/planning:plan`. Every planning gate is closed. Implementation starts at Phase 0 on branch `feat/oceanos-pr-mvp`.
@@ -350,14 +386,15 @@ A small horizontal prerequisite, about 150 LOC.
 Resolves V1, V2, V3, V6 and V7 **before** any code depends on them (OD1). Produces the real fixtures
 that T24 requires.
 
-- [x] **`scripts/acolite_env.sh`** supports `--check`, `--dry-run` and idempotent re-runs. It:
+- [x] **`scripts/acolite_env.py`** supports `--check` (the default, read-only), `--install` and
+  `--dry-run`, and is idempotent. It:
   - moves the current `~/acolite` to `~/acolite.main-d61c8de` (kept, not deleted);
   - clones tag `20260421.0` with full history of that tag;
   - asserts `HEAD == f73cbe73887c2b114d9d3c70865effee73871525`;
   - appends `version=20260421.0` to `config/config.txt` if absent (Q15);
   - runs `launch_acolite.py --retrieve_luts --sensor S2A_MSI,S2B_MSI,S2C_MSI`.
 - [x] **Runtime dependency `pyogrio`** (vector reader for the GSHHG shapefile; B12), added in this phase with `uv add`.
-- [x] **`scripts/fetch_gshhg.sh`**, idempotent, with the **expected archive sha256 pinned in the script** (not written by it; B12), downloads GSHHG (full
+- [x] **`scripts/fetch_reference_data.py gshhg`**, idempotent, with the **expected archive sha256 pinned in the script** (not written by it; B12), downloads GSHHG (full
   resolution, level 1 land polygons) into OCEANOS-owned `data/external/gshhg/`. OCEANOS, not ACOLITE,
   applies the land mask (DA-1).
 
@@ -528,13 +565,13 @@ that T24 requires.
 
 **Sanity Check:**
 
-- `scripts/acolite_env.sh --check` exits 0.
+- `uv run python scripts/acolite_env.py --check` exits 0.
 - `git -C ~/acolite rev-parse HEAD` prints `f73cbe73887c2b114d9d3c70865effee73871525`.
 - `grep -c '^version=20260421.0' ~/acolite/config/config.txt` prints `1`.
 - `grep -cE '\*\*Outcome \(pin 20260421\.0\): (verified|refuted)\*\*' docs/topics/oceanos-pr-mvp/design/design-threads.md` prints `7`.
 - `grep -E '^\| \*\*V(1|2)\*\*' docs/topics/oceanos-pr-mvp/design/design-threads.md | grep -c 'Outcome (pin 20260421.0): refuted'`
   prints `0`. A refuted V1/V2 must stop the phase, not pass it.
-- `scripts/fetch_gshhg.sh --check` exits 0 (it compares the archive against the sha256 pinned in the script).
+- `uv run python scripts/fetch_reference_data.py gshhg --check` exits 0 (it compares the archive against the sha256 pinned in the script).
 - `test -f tests/fixtures/acolite/window.json && ls tests/fixtures/acolite/success/*_L2W.nc tests/fixtures/acolite/success/*_L2R.nc` exits 0.
 - `ls -d tests/fixtures/acolite/{skipped,ancillary_fallback,missing_variable,cloudy}` exits 0.
 - `test "$(du -sb tests/fixtures/acolite | cut -f1)" -lt 10000000` exits 0.
@@ -748,7 +785,7 @@ Estimated size: 2 300–2 800 LOC over three sub-phases, one commit each.
     overpass and `data/superseded/` holds the previous one.
   - The `run_one` grid is built from `tests/fixtures/acolite/window.json`, as before. The `run_one` test builds its grid from `tests/fixtures/acolite/window.json`.
 - **Runtime probe (real)**, a script listing every prerequisite (finding 10):
-  - `scripts/probe_run_one.sh` runs `uv run oceanospr grid build`;
+  - `scripts/probe_run_one.py` runs the CLI `grid build` in process;
   - then `uv run oceanospr scenes search --start <A date> --end <A date+1>`, with the date read
     from `.work/oceanos-pr-mvp/spikes/scenes.json`;
   - then `uv run oceanospr pipeline run-one --overpass <A overpass id>`;
@@ -767,7 +804,7 @@ Estimated size: 1 200–1 500 LOC.
   Parguera/SW Puerto Rico (NOAA NCEI CUDEM / Coastal Relief Model candidates) — resolution, vertical
   datum, licence, coverage of the AOI. Record the chosen dataset and the reason in
   `design/design-threads.md` §I. **User gate** if none is suitable (fallback: per-product caveat).
-- [x] **`scripts/fetch_bathymetry.sh`** (idempotent, sha256 recorded) into `data/external/bathymetry/`.
+- [x] **`scripts/fetch_reference_data.py bathymetry`** (idempotent, sha256 recorded) into `data/external/bathymetry/`.
 - [x] **`processing/masks.py` `AnalysisMask`**, built once per grid:
   - **Amended at DA-6 (see design-threads "DA-1 amendment"): land mask and buffer from CUDEM elevation > 0 m, not GSHHG.**
   - coastal buffer `150 m` (D-2: the midpoint of the Brief's 100–200 m);
@@ -828,7 +865,7 @@ Estimated size: 1 200–1 500 LOC.
   - the usable variant's release has all 8 COG products;
   - `provenance.json` contains the keys `scenes`, `acolite`, `oceanos`, `ancillary`, `products` and
     `scientific_label`.
-- **Runtime probe:** `scripts/probe_run_one.sh --force-reprocess` exits 0. Then
+- **Runtime probe:** `uv run python scripts/probe_run_one.py --force-reprocess` exits 0. Then
   `uv run python -c "import json,sys; p=json.load(open(sys.argv[1]+'/provenance.json')); assert {'scenes','acolite','oceanos','ancillary','products','scientific_label'} <= p.keys()" "$(uv run oceanospr pipeline latest-release --overpass <A id>)"`
   exits 0.
 - Full suite + ruff (baseline).
@@ -1018,15 +1055,17 @@ Estimated size: ~300 LOC net, mostly deletions.
   `Sentinel2Provider`, `build_grid`, `composites`, `earth-search` and `sentinel-2-l2a`. Classify
   each as retire or keep, with the keep list below.
 - [ ] **Update scheduling.**
-  - `scripts/oceanos-update.sh` (lock-aware, logs to `data/state/`);
+  - `scripts/oceanos_update.py` (lock-aware, logs to `data/state/`); Python, like every other
+    operational entry point (see the 2026-09-15 amendment);
   - `docs/deploy/oceanos-update.{service,timer}`, and a cron alternative;
-  - **a Windows Task Scheduler entry** (`wsl -d <distro> -e /path/scripts/oceanos-update.sh`,
+  - **a Windows Task Scheduler entry** (`wsl -d <distro> -e /path/.venv/bin/python /path/scripts/oceanos_update.py`,
     daily, "run whether user is logged on"), because WSL timers only fire while WSL runs (DA #19);
   - `pipeline status` reports `last_successful_update_age_hours`.
 - [ ] **Retire:**
   - `catalog/sentinel2.py`, `tests/test_scenes.py`, `tests/integration/test_sentinel2_live.py`;
   - `build_grid(reference_path)` + its tests;
-  - `src/oceanos/composites/`.
+  - ~~`src/oceanos/composites/`~~ **done 2026-09-15**: dead scaffolding with no importer,
+    removed with the script refactor.
 - [ ] **Keep (allow-listed):**
   - the committed `catalog/` L2A collection (`CURRENT_STATE.md` §4);
   - `LocalSceneCatalog`'s collection-id handling;
@@ -1040,7 +1079,7 @@ Estimated size: ~300 LOC net, mostly deletions.
 - `grep -rnE "earth-search|Sentinel2Provider|build_grid\(|oceanos\.composites" src tests configs | wc -l` prints `0`.
 - `grep -rn "sentinel-2-l2a" src tests configs | grep -v -e "tests/fixtures/stac_item.json" -e "test_local_catalog.py" | wc -l` prints `0`.
 - `test ! -d src/oceanos/composites` exits 0.
-- `bash -n scripts/oceanos-update.sh` exits 0.
+- `uv run python scripts/oceanos_update.py --help` exits 0.
 - `git branch --merged master | grep -c "feat/oceanos-pr-mvp"` prints `1`, after the gate.
 - Full suite + ruff (baseline).
 
