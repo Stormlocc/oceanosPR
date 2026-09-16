@@ -14,7 +14,6 @@ from oceanos.catalog.models import (
     SceneSearchResult,
 )
 from oceanos.catalog.provider import SceneProvider, SceneProviderError
-from oceanos.catalog.sentinel2 import Sentinel2Provider
 
 __all__ = [
     "CdseODataProvider",
@@ -26,7 +25,6 @@ __all__ = [
     "SceneProvider",
     "SceneProviderError",
     "SceneSearchResult",
-    "Sentinel2Provider",
     "scene_from_stac_item",
     "scene_to_stac_item",
 ]

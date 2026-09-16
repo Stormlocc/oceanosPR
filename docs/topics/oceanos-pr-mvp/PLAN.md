@@ -233,6 +233,69 @@ boundary, pinned value or architectural decision changed.**
   here: the package held one docstring, had no importer, and belonged to the rejected in-house
   composites. `catalog/sentinel2.py`, `tests/test_scenes.py` and `build_grid` are **not** touched;
   they still have consumers and their retirement stays a Phase 7 unit behind the OD2 gate.
+  **Superseded 2026-09-16:** the user pulled that retirement forward; see the next section.
+
+### Resolved after lock (legacy retirement pulled forward + study pause, 2026-09-16)
+
+The user chose to stop implementation after Phase 3 to study the code in depth and publish the work,
+and to clear the dead Fase 1-5 lineage first. Two locked decisions were opened **by the user**; both
+are recorded here rather than silently diverged from.
+
+**1. The OD2 merge gate was opened early.** `feat/oceanos-pr-mvp` merges into `master` now, at the
+Phase 3 boundary, instead of at the end of Phase 7. The merge keeps the `--no-ff` shape Phase 7
+specifies. `master` was a strict ancestor of the branch (0 commits of its own against 17), so the
+merge carries no conflict and no content decision. **Phase 7 keeps its own OD2 gate:** when the MVP
+finishes, the branch merges again. Nothing else about OD2 changed - implementation still happens on
+`feat/oceanos-pr-mvp` and never directly on `master`.
+
+**2. The Phase 7 retire list was executed early**, for the parts with no remaining production
+consumer:
+
+| Retired | Evidence it was dead |
+| --- | --- |
+| `src/oceanos/catalog/sentinel2.py` (`Sentinel2Provider`, 202 lines) | The Element84/L2A discovery path. The CLI and `run_one` use `CdseODataProvider`; its only importers were `catalog/__init__.py` and `tests/test_scenes.py`. |
+| `tests/test_scenes.py` (247 lines) | Tested `Sentinel2Provider` exclusively. |
+| `normalize_band` + `_is_gdal_dataset_name` (`processing/normalize.py`) | The Fase 5 resampling path, superseded by `conform_layer` (copy, no resampling). Consumed only by `tests/test_normalize.py`. |
+| `build_grid(reference_path, ...)` (`processing/grid.py`) | The scene-referenced grid, superseded by `build_delivery_grid` on the fixed EPSG:32619 anchor. Consumed only by `tests/test_normalize.py`. |
+| `tests/test_normalize.py` (186 lines) | Every test targeted the two functions above. Its one piece of unique coverage, `test_gridspec_rejects_inconsistent_bounds`, was **moved** to `tests/test_grid.py`, where `GridSpec` belongs. |
+
+- `tests/integration/test_sentinel2_live.py` was already absent; that retire item is moot.
+- `LocalSceneCatalog`'s default `source_provider` moved from `"Sentinel2Provider"` to
+  `"CdseODataProvider"`; `tests/test_local_catalog.py` asserts the new default.
+- **Kept, as the Phase 7 allow-list requires:** `tests/fixtures/stac_item.json` (still consumed by
+  `tests/test_cdse.py`), `LocalSceneCatalog`'s collection-id handling, and `metric_crs` /
+  `buffered_aoi`, which `build_delivery_grid` and `GridSpec` still use.
+- **GSHHG was not touched.** `FailureCode.GSHHG_MISSING`, `AcoliteInstallation.gshhg_present`, the
+  `InstallationProbe` check and `fetch_reference_data.py gshhg` stay wired even though the land mask
+  now derives from CUDEM (DA-1 amendment). Retiring it changes the domain model and three test
+  files, so it remains a Phase 7 unit.
+
+**3. `catalog/` is no longer versioned.** It was removed from the index (working tree untouched) and
+added to `.gitignore`. It is machine-generated state rebuilt by `scenes search`, it churned on every
+real probe, and `LocalSceneCatalog` recreates its root when absent (`catalog/local.py:193`). This
+**supersedes the Phase 7 keep item** "the committed `catalog/` L2A collection", which held zero items
+and belonged to the rejected L2A lineage. The Phase 4 index decision is unaffected: that concerns
+`data/state/`, not this STAC scene catalog.
+
+**Phase 7's Sanity Check needs one allow-list entry.** Its grep
+
+    grep -rnE "earth-search|Sentinel2Provider|build_grid\(|oceanos\.composites" src tests configs | wc -l
+
+now prints `1`, not `0`. The single hit is `tests/test_config.py:80`, a **negative** test asserting
+that `OCEANOS_SCENES__PROVIDER=earth-search` is rejected by configuration validation. It proves the
+retired provider cannot be re-enabled, and must be kept.
+
+**No stage, contract, pinned value, acceptance criterion or phase boundary moved.** Phase 4 remains
+the next unit and is still `[TODO]`.
+
+**Verification after these removals:**
+
+| Command | Result |
+| --- | --- |
+| `uv run pytest -q` | 185 passed (230 before; the 45 removed tests) |
+| `uv run ruff check src tests scripts` | clean |
+| `uv run mypy src/oceanos/acolite src/oceanos/domain.py src/oceanos/pipeline` | clean, 14 files |
+| `uv run python -m oceanos aoi info --config configs/mvp.yaml` | exit 0 |
 
 ## Plan
 
@@ -1061,15 +1124,25 @@ Estimated size: ~300 LOC net, mostly deletions.
   - **a Windows Task Scheduler entry** (`wsl -d <distro> -e /path/.venv/bin/python /path/scripts/oceanos_update.py`,
     daily, "run whether user is logged on"), because WSL timers only fire while WSL runs (DA #19);
   - `pipeline status` reports `last_successful_update_age_hours`.
-- [ ] **Retire:**
-  - `catalog/sentinel2.py`, `tests/test_scenes.py`, `tests/integration/test_sentinel2_live.py`;
-  - `build_grid(reference_path)` + its tests;
+- [x] **Retire:** **done 2026-09-16**, pulled forward at the user's request; see "Resolved after
+  lock (legacy retirement pulled forward + study pause, 2026-09-16)".
+  - ~~`catalog/sentinel2.py`, `tests/test_scenes.py`~~ removed;
+    `tests/integration/test_sentinel2_live.py` never existed.
+  - ~~`build_grid(reference_path)` + its tests~~ removed, together with `normalize_band` and
+    `tests/test_normalize.py`; `test_gridspec_rejects_inconsistent_bounds` moved to
+    `tests/test_grid.py`.
   - ~~`src/oceanos/composites/`~~ **done 2026-09-15**: dead scaffolding with no importer,
     removed with the script refactor.
+  - **Still open for this phase:** GSHHG (`FailureCode.GSHHG_MISSING`,
+    `AcoliteInstallation.gshhg_present`, the `InstallationProbe` check and
+    `fetch_reference_data.py gshhg`), unused since the DA-1 amendment moved the land mask to CUDEM.
 - [ ] **Keep (allow-listed):**
-  - the committed `catalog/` L2A collection (`CURRENT_STATE.md` §4);
+  - ~~the committed `catalog/` L2A collection (`CURRENT_STATE.md` §4)~~ **superseded 2026-09-16**:
+    `catalog/` is untracked and ignored; the L2A collection held zero items and went with it;
   - `LocalSceneCatalog`'s collection-id handling;
-  - `tests/fixtures/stac_item.json`, the 1.0 compatibility fixture.
+  - `tests/fixtures/stac_item.json`, the 1.0 compatibility fixture;
+  - `tests/test_config.py:80` (`PROVIDER=earth-search`), the negative test that keeps the retired
+    provider unreachable - allow-list it in the Sanity Check grep, which now prints `1`.
 - [ ] **Docs.** Update `docs/architecture.md` and `SUMMARY.md`. List the ADR candidates from the
   handoff in `SUMMARY.md` §10.
 - [ ] **User-approval gate (OD2).** Merge `feat/oceanos-pr-mvp` into `master` (local, `--no-ff`).

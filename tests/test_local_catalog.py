@@ -93,7 +93,7 @@ def test_add_scene_preserves_scientific_metadata_and_urls(tmp_path, scene):
     assert item.properties["eo:cloud_cover"] == scene.cloud_cover
     assert item.properties["oceanos:original_scene_id"] == scene.scene_id
     assert item.properties["oceanos:source_catalog"] == scene.source_catalog
-    assert item.properties["oceanos:source_provider"] == "Sentinel2Provider"
+    assert item.properties["oceanos:source_provider"] == "CdseODataProvider"
     assert item.properties["oceanos:processing_status"] == "discovered"
     assert datetime.fromisoformat(item.properties["oceanos:ingested_at"]).tzinfo is not None
     assert item.assets["red"].href == scene.assets["red"].href

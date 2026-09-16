@@ -5,8 +5,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+from rasterio.crs import CRS
+from rasterio.transform import from_origin
+
 from oceanos.aoi import load_aoi
-from oceanos.processing.grid import DeliveryGrid, build_delivery_grid
+from oceanos.processing.grid import DeliveryGrid, GridSpec, build_delivery_grid
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -33,3 +37,8 @@ def test_aoi_id_changes_with_geometry_not_projection() -> None:
     source = load_aoi(ROOT / "tests/fixtures/aoi.geojson", name="Test AOI")
     projected = load_aoi(ROOT / "tests/fixtures/aoi.geojson", name="Test AOI", target_crs="EPSG:3857")
     assert source.aoi_id == projected.aoi_id
+
+
+def test_gridspec_rejects_inconsistent_bounds() -> None:
+    with pytest.raises(ValueError, match="bounds"):
+        GridSpec(CRS.from_string("EPSG:32619"), 10, (0, 0, 1, 1), 4, 4, from_origin(500000, 200, 10, 10))

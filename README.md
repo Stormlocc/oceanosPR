@@ -5,6 +5,19 @@ actual publica una observación de extremo a extremo: descubrimiento L1C, selecc
 adquisición íntegra del SAFE, ACOLITE verificado, archivo, conformidad a la grilla de entrega y una
 release inmutable con STAC derivado, con veredicto de calidad, máscaras de análisis y procedencia completa.
 
+## Estado del proyecto
+
+> **En pausa tras la Fase 3 (2026-09-16).** Las fases 0 a 3 del MVP ACOLITE están completas y
+> verificadas: 185 tests en verde, `ruff` limpio y `mypy` estricto limpio en `acolite`, `domain` y
+> `pipeline`. La **Fase 4** (índice, orquestación, retención y backfill acotado) no ha empezado.
+>
+> **Qué funciona hoy, de extremo a extremo:** `grid build` -> `scenes search` ->
+> `pipeline run-one --overpass <ID>` publica una observación completa, con veredicto de calidad y
+> procedencia. **Qué todavía no existe:** procesamiento por lotes, API de lectura y visor.
+>
+> El registro de ejecución vive en `docs/topics/oceanos-pr-mvp/IMPLEMENTATION_HANDOFF.md` (estado y
+> próxima acción) y en `docs/topics/oceanos-pr-mvp/PLAN.md` (fases y criterios de aceptación).
+
 ## Área de interés y grilla de entrega
 
 Instala las dependencias con `uv sync` y ejecuta:

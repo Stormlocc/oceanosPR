@@ -76,7 +76,7 @@ class _Layout(HrefLayoutStrategy):
 def scene_to_stac_item(
     scene: SceneMetadata,
     *,
-    source_provider: str = "Sentinel2Provider",
+    source_provider: str = "CdseODataProvider",
     ingested_at: datetime | None = None,
 ) -> pystac.Item:
     """Copy scientific metadata verbatim; add local provenance separately."""
@@ -221,7 +221,7 @@ class LocalSceneCatalog:
         except (OSError, ValueError, pystac.STACError) as exc:
             raise LocalCatalogError(f"Cannot save local catalog {self.path}: {exc}") from exc
 
-    def add_scene(self, scene: SceneMetadata, *, source_provider: str = "Sentinel2Provider") -> bool:
+    def add_scene(self, scene: SceneMetadata, *, source_provider: str = "CdseODataProvider") -> bool:
         """Persist one scene; True if inserted, False if already identical."""
         catalog = self._load()
         existing = next(catalog.get_items(scene.scene_id, recursive=True), None)

@@ -3,6 +3,55 @@
 Durable execution record between implementation sessions. Git, PLAN phase tags and tests remain
 authoritative; this file records what they cannot.
 
+## PAUSED (2026-09-16)
+
+**Implementation is deliberately stopped after Phase 3.** The user is pausing to study the codebase
+in depth before Phase 4 begins. This is not a blocked or failed state: every phase through 3 is
+complete, tagged and verified.
+
+- **Branch:** `feat/oceanos-pr-mvp`, merged into `master` at this point. The OD2 merge gate was
+  opened early by the user; Phase 7 keeps its own gate and the branch merges again when the MVP
+  finishes. Implementation never happens directly on `master`.
+- **Published:** the repository is pushed to the user's GitHub remote. `master` and
+  `feat/oceanos-pr-mvp` both exist there; nothing is merged beyond the point described above.
+- **Next unit when work resumes:** Phase 4 (index, orchestration, retention, bounded backfill),
+  still `[TODO]`, not started. Read its PLAN section first; it runs only when the user hands it over.
+- **Legacy retirement was pulled forward** from Phase 7 at the user's request, and `catalog/` is no
+  longer versioned. Both are recorded in PLAN.md, "Resolved after lock (legacy retirement pulled
+  forward + study pause, 2026-09-16)", with the full evidence table.
+
+**What changed in the working tree at the pause:**
+
+| Change | Detail |
+| --- | --- |
+| Removed | `src/oceanos/catalog/sentinel2.py`, `tests/test_scenes.py`, `tests/test_normalize.py` |
+| Removed | `normalize_band` + `_is_gdal_dataset_name` from `processing/normalize.py`; `build_grid` from `processing/grid.py`; both re-exports from `processing/__init__.py`; `Sentinel2Provider` from `catalog/__init__.py` |
+| Changed | `LocalSceneCatalog` default `source_provider` is now `"CdseODataProvider"` (two call sites); `tests/test_local_catalog.py` asserts it |
+| Moved | `test_gridspec_rejects_inconsistent_bounds` from `tests/test_normalize.py` to `tests/test_grid.py` |
+| Untracked | `catalog/` removed from the index and added to `.gitignore`; the working tree is untouched |
+| Docs | this section, the PLAN section named above, the `docs/architecture.md` scope header, the `README.md` status block |
+
+**Verification at the pause:**
+
+| Command | Result |
+| --- | --- |
+| `uv run pytest -q` | 185 passed (230 before the removals; 45 removed tests) |
+| `uv run ruff check src tests scripts` | clean |
+| `uv run mypy src/oceanos/acolite src/oceanos/domain.py src/oceanos/pipeline` | clean, 14 files |
+| `uv run python -m oceanos aoi info --config configs/mvp.yaml` | exit 0 |
+
+The real ACOLITE probe was **not** re-run for this clean-up: it downloads ~800 MB and runs ACOLITE,
+and nothing on the processing path changed. The last real verdicts remain those recorded under
+"Phase 3 closure record" below.
+
+**Reading order when work resumes:** this section, then PLAN.md Phase 4, then the design sections
+that phase names. The durable execution record is still version control, the PLAN phase tags, the
+tests and this file - never chat history.
+
+**Note on the repository root.** `IMPLEMENTATION_HANDOFF.md` at the root is a **pointer only**. It
+was a duplicate frozen at Phase 1 while Phases 2.2, 2.3 and 3 updated this file; it was reduced to a
+redirect on 2026-09-15. This file, under `docs/topics/oceanos-pr-mvp/`, is the live record.
+
 ## State (2026-09-15)
 
 - **Branch:** `feat/oceanos-pr-mvp`.

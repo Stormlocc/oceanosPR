@@ -9,13 +9,10 @@ from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
 
-import rasterio
 from pydantic import AwareDatetime, ConfigDict, Field, field_serializer, field_validator
 from pyproj import CRS as Projection
 from rasterio.crs import CRS
 from rasterio.transform import Affine, array_bounds, from_origin
-from rasterio.warp import calculate_default_transform
-from shapely.geometry import box
 
 from oceanos.aoi import AOI, reproject_aoi
 from oceanos.domain import MetadataModel
@@ -145,48 +142,3 @@ def build_delivery_grid(aoi: AOI, *, buffer_m: float = 0) -> DeliveryGrid:
         grid_id=f"grid-{sha256(canonical).hexdigest()[:12]}", aoi_id=aoi.aoi_id,
         spec=spec, anchor=(0, 0), buffer_m=buffer_m, created_at=datetime.now(UTC),
     )
-
-
-def build_grid(
-    reference_path: str | Path, aoi: AOI, *, target_crs: str | CRS | None = None,
-    resolution: float = 10, buffer_m: float = 0,
-) -> GridSpec:
-    """Cover the buffered AOI, snapping outward from the reference pixel origin.
-
-    The reference origin is preserved when it is north-up in the target CRS.
-    Otherwise GDAL estimates its projected origin once, shared by every band.
-    Grid bounds enclose the buffered AOI; areas outside the scene become nodata.
-    """
-    if not math.isfinite(resolution) or resolution <= 0:
-        raise ValueError("resolution must be finite and positive")
-    crs = metric_crs(target_crs if target_crs is not None else aoi.crs.to_wkt())
-    geometry = buffered_aoi(aoi, crs, buffer_m)
-    with rasterio.open(reference_path) as reference:
-        if reference.crs is None or reference.count != 1:
-            raise ValueError("Reference must be a georeferenced single-band raster")
-        projected_footprint = reproject_aoi(
-            AOI("reference", box(*reference.bounds), Projection.from_user_input(reference.crs)),
-            crs.to_wkt(),
-        ).geometry
-        if not geometry.intersects(projected_footprint):
-            raise ValueError("Buffered AOI does not intersect the reference raster")
-        if reference.crs == crs and reference.transform.b == reference.transform.d == 0:
-            anchor = reference.transform
-        else:
-            anchor, _, _ = calculate_default_transform(
-                reference.crs, crs, reference.width, reference.height, *reference.bounds,
-                resolution=resolution,
-            )
-    west, south, east, north = geometry.bounds
-    # Suppress roundoff at existing grid lines (less than a billionth of a pixel).
-    def pixel(value):
-        nearest = round(value)
-        return nearest if abs(value - nearest) < 1e-9 else value
-
-    left = math.floor(pixel((west - anchor.c) / resolution))
-    right = math.ceil(pixel((east - anchor.c) / resolution))
-    top = math.floor(pixel((anchor.f - north) / resolution))
-    bottom = math.ceil(pixel((anchor.f - south) / resolution))
-    transform = Affine(resolution, 0, anchor.c + left * resolution, 0, -resolution, anchor.f - top * resolution)
-    width, height = right - left, bottom - top
-    return GridSpec(crs, resolution, array_bounds(height, width, transform), width, height, transform)

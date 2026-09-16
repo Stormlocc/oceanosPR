@@ -1,6 +1,5 @@
 """Delivery-grid conformance and windowed normalization; no radiometric calibration or indices."""
 
-import json
 import math
 import os
 import tempfile
@@ -11,12 +10,8 @@ from typing import Literal
 
 import numpy as np
 import rasterio
-from rasterio.enums import Resampling
 from rasterio.errors import NotGeoreferencedWarning
-from rasterio.features import geometry_mask
-from rasterio.vrt import WarpedVRT
 from rasterio.windows import Window
-from shapely.geometry import mapping
 
 from oceanos.domain import (
     ArtifactRef,
@@ -44,10 +39,6 @@ class ConformError(RuntimeError):
         self.code = code
 
 
-def _is_gdal_dataset_name(value: str | Path) -> bool:
-    return isinstance(value, str) and value.startswith("NETCDF:")
-
-
 def assert_aligned(path: str | Path, grid: GridSpec) -> None:
     """Require exact equality, including bounds derived from the stored transform."""
     with rasterio.open(path) as dataset:
@@ -55,87 +46,6 @@ def assert_aligned(path: str | Path, grid: GridSpec) -> None:
             grid.crs, grid.transform, grid.width, grid.height, grid.bounds,
         ):
             raise NormalizationError(f"Raster is not exactly aligned to GridSpec: {path}")
-
-
-def normalize_band(
-    source_path: str | Path, destination_path: str | Path, grid: GridSpec, *,
-    clip_geometry=None, categorical: bool = False,
-    resampling_method: Literal["nearest", "bilinear"] | None = None,
-    warp_memory_limit_mb: int = 64,
-) -> dict:
-    """Write one tiled Float32 GeoTIFF in blocks, preserving scale and offset.
-
-    Nodata/masks from the source and pixel centers outside clip_geometry become
-    NaN. Categorical data always use nearest; an explicit bilinear request fails.
-    clip_geometry must be in the GridSpec CRS. Output values remain in source
-    numeric units, without applying any reflectance scaling or index calculation.
-    """
-    method = resampling_method or ("nearest" if categorical else "bilinear")
-    if method not in {"nearest", "bilinear"} or (categorical and method != "nearest"):
-        raise ValueError("Categories require nearest; continuous data allow nearest or bilinear")
-    if not isinstance(warp_memory_limit_mb, int) or warp_memory_limit_mb <= 0:
-        raise ValueError("warp_memory_limit_mb must be a positive integer")
-    source_name = source_path if _is_gdal_dataset_name(source_path) else Path(source_path).resolve()
-    destination_path = Path(destination_path).resolve()
-    if source_name == destination_path:
-        raise ValueError("Normalized output must not overwrite the source raster")
-    destination_path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = None
-    try:
-        with rasterio.Env(GDAL_CACHEMAX=warp_memory_limit_mb * 1024**2), rasterio.open(source_path) as source:
-            if source.crs is None or source.count != 1:
-                raise ValueError("Source must be a georeferenced single-band raster")
-            if source.dtypes[0] not in {"uint8", "int8", "uint16", "int16", "float32"}:
-                raise ValueError("MVP normalization supports up to 16-bit integers or Float32 inputs")
-            native_resolution = list(source.res)
-            native_crs = source.crs.to_string()
-            native_units = "degree" if source.crs.is_geographic else source.crs.linear_units
-            with tempfile.NamedTemporaryFile(dir=destination_path.parent, suffix=".tif", delete=False) as stream:
-                temporary = Path(stream.name)
-            profile = {
-                "driver": "GTiff", "count": 1, "dtype": "float32", "nodata": float("nan"),
-                "crs": grid.crs, "transform": grid.transform, "width": grid.width, "height": grid.height,
-                "tiled": True, "blockxsize": BLOCK_SIZE, "blockysize": BLOCK_SIZE,
-                "compress": "deflate", "predictor": 3, "BIGTIFF": "IF_SAFER",
-            }
-            with WarpedVRT(
-                source, crs=grid.crs, transform=grid.transform, width=grid.width, height=grid.height,
-                src_nodata=source.nodata, nodata=float("nan"), dtype="float32",
-                resampling=Resampling[method], warp_mem_limit=warp_memory_limit_mb,
-            ) as warped, rasterio.open(temporary, "w", **profile) as destination:
-                for _, window in destination.block_windows(1):
-                    data = warped.read(1, window=window, masked=True).filled(np.nan)
-                    if clip_geometry is not None:
-                        outside = geometry_mask(
-                            [mapping(clip_geometry)], out_shape=data.shape,
-                            transform=destination.window_transform(window), all_touched=False,
-                        )
-                        data[outside] = np.nan
-                    destination.write(data, 1, window=window)
-                destination.scales = source.scales
-                destination.offsets = source.offsets
-                if source.units[0] is not None:
-                    destination.set_band_unit(1, source.units[0])
-                destination.update_tags(
-                    native_resolution=json.dumps(native_resolution), native_crs=native_crs,
-                    native_resolution_units=native_units,
-                    processing_resolution=str(grid.resolution), processing_resolution_units="metre",
-                    resampling_method=method, data_kind="categorical" if categorical else "continuous",
-                    source_path=str(source_name), source_nodata=str(source.nodata),
-                )
-            assert_aligned(temporary, grid)
-        os.replace(temporary, destination_path)
-        return {
-            "source_path": str(source_name), "local_path": destination_path.name,
-            "native_resolution": native_resolution, "processing_resolution": grid.resolution,
-            "native_crs": native_crs, "native_resolution_units": native_units,
-            "processing_resolution_units": "metre",
-            "resampling_method": method, "dtype": "float32", "nodata": "NaN",
-            "file_size": destination_path.stat().st_size,
-        }
-    finally:
-        if temporary is not None and temporary.exists():
-            temporary.unlink()
 
 
 def _file_sha256(path: Path) -> str:

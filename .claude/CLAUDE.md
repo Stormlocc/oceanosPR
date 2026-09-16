@@ -27,8 +27,9 @@ system.
 
 At the beginning of work on the OCEANOS PR MVP:
 
-1. Read `docs/topics/oceanos-pr-mvp/IMPLEMENTATION_HANDOFF.md` **if it exists**. It is not created
-   yet; the first implementation session creates it.
+1. Read `docs/topics/oceanos-pr-mvp/IMPLEMENTATION_HANDOFF.md`. It exists and is the live record:
+   its top section states the current state and the exact next action. The copy at the repository
+   root is a redirect only.
 2. Read the active portion of `docs/topics/oceanos-pr-mvp/PLAN.md`: the first phase not tagged
    `[DONE]`, plus "Handoff to implementation".
 3. Inspect `git status`, the current branch and recent commits.
@@ -48,27 +49,31 @@ The project uses `uv`. Prefix commands with `uv run` unless the venv is active.
 ```bash
 uv sync                                                   # install deps from uv.lock
 uv run pytest -q                                          # full offline suite (must stay green every phase)
-uv run pytest tests/test_normalize.py -q                  # one file
+uv run pytest tests/test_conform.py -q                    # one file
 uv run pytest tests/test_fetch.py::test_name -q           # one test
 uv run pytest --run-integration tests/integration -q      # opt-in live network tests
 uv run python -m oceanos aoi info --config configs/mvp.yaml   # CLI (argparse, src/oceanos/__main__.py)
 ```
 
-- **Console script.** The `oceanospr` script in `pyproject.toml` is broken until PLAN Phase 0
-  fixes it; use `python -m oceanos`.
-- **Tooling.** `ruff`, `mypy` and the `--run-acolite` opt-in golden test do not exist yet; PLAN
-  Phases 0 and 2.2 add them. There is no CI.
+- **Console script.** `oceanospr` works since PLAN Phase 0; `python -m oceanos` is equivalent.
+- **Tooling.** `ruff` and `mypy` are configured (Phase 0) and the `--run-acolite` opt-in golden
+  test exists (Phase 2.2). There is still no CI.
 - **Offline hooks.** `tests/conftest.py` skips collecting `tests/integration` unless
   `--run-integration` is given. Catalog, fetch and normalize tests block sockets with `no_network`
   fixtures and fake HTTP with `httpx.MockTransport`.
 - **ACOLITE.** It is **not** a Python dependency. It is an external clone at `~/acolite`, run with
   the micromamba env `~/micromamba/envs/acolite` as
   `python launch_acolite.py --cli --settings=<file>`. The pin is tag `20260421.0`, commit
-  `f73cbe73887c2b114d9d3c70865effee73871525`. As of 2026-09-14 the local clone is a shallow copy of
-  `main`, not the pin; PLAN Phase 1 replaces it.
+  `f73cbe73887c2b114d9d3c70865effee73871525`. Phase 1 replaced the shallow clone: the local
+  checkout sits at the pin and `scripts/acolite_env.py --check` verifies it.
 - **Credentials.** They live in `~/.netrc` (machines `earthdata`, `cdse`) and are never put in config.
 
-## Architecture (current code, Fase 1–5)
+## Architecture (current code)
+
+> **Note (2026-09-16).** The Fase 1–5 legacy was retired: `Sentinel2Provider` (the Element84/L2A
+> discovery path), `normalize_band` and `build_grid` no longer exist, and `catalog/` is no longer
+> versioned. Discovery is `CdseODataProvider`; conformance is `conform_layer`. See PLAN.md,
+> "Resolved after lock (legacy retirement pulled forward + study pause, 2026-09-16)".
 
 The pipeline today is **AOI → STAC discovery (Element84, L2A) → local STAC catalog → verified band
 download → spatial normalization**, and it stops there. `docs/architecture.md` (Spanish) and the
@@ -85,11 +90,12 @@ No stage re-fetches or regenerates a missing upstream artifact; it errors instea
 House patterns every new stage must reuse:
 
 - **Adapter boundary.** Provider vocabulary stays in the adapter: STAC property names live only in
-  `catalog/sentinel2.py` and `catalog/local.py`, and downstream code uses `SceneMetadata`. The new
+  `catalog/cdse.py` and `catalog/local.py`, and downstream code uses `SceneMetadata`. The new
   `oceanos.acolite` package is meant to confine ACOLITE vocabulary the same way (import/literal
   rules A1–A4 in `design/topology.md`).
-- **Staging → verify → atomic `os.replace` → rollback.** This is the shape of `normalize_scene` in
-  `processing/normalize.py`. A failed run leaves the previous output intact.
+- **Staging → verify → atomic `os.replace` → rollback.** The shape of `conform_layer`
+  (`processing/normalize.py`) and `publish_release` (`publishing/release.py`). A failed run leaves
+  the previous output intact.
 - **Exact-equality alignment.** `GridSpec` (`processing/grid.py`) validates itself, and
   `assert_aligned` re-reads every raster against the grid before publishing.
 - **Strict models.** Pydantic models set `extra="forbid"` and `allow_inf_nan=False`. Cross-stage
@@ -97,8 +103,8 @@ House patterns every new stage must reuse:
 - **Config precedence.** `OceanosSettings` resolves paths relative to `data_root`. Environment
   variables (`OCEANOS_`, nested with `__`) override YAML. Loading config creates no directories
   and makes no network calls.
-- **Single writer.** Only one writer per catalog and per scene is supported. This is documented but
-  not enforced yet; PLAN adds `WriterLock`.
+- **Single writer.** Enforced since Phase 2.2 by `WriterLock` (`storage.py`), held across P1-P8 of
+  `pipeline run-one`, with stale-holder recovery.
 
 ## Where the MVP takes the architecture
 
