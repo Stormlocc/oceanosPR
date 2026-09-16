@@ -8,3 +8,6 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Skills locales de Codex — nunca se versionan (regla del PLAN)
+.agents/
