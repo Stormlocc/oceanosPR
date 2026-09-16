@@ -14,3 +14,6 @@ wheels/
 
 # Catalogo STAC local: estado generado por `scenes search`, no se versiona
 catalog/
+
+# Worktrees temporales de Claude Code
+.claude/worktrees/
