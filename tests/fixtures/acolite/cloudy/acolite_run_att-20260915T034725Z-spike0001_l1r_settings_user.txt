@@ -1,0 +1,23 @@
+## ACOLITE settings
+## Written at 2026-09-14 23:47:26
+inputfile=/home/antho/projects/oceanosPR/.work/oceanos-pr-mvp/spikes/safe/S2B_MSIL1C_20260705T150719_N0512_R082_T19QGV_20260705T182340.zip
+output=/home/antho/projects/oceanosPR/.work/oceanos-pr-mvp/spikes/run_d2_valid
+runid=att-20260915T034725Z-spike0001
+limit=17.8999,-67.1001,18.0001,-66.9499
+extract_inputfile=True
+s2_target_res=10
+l2w_parameters=rhow_*,Rrs_*,rhorc_*,tur_nechad2016,spm_nechad2016,chl_re_gons740,fai,fait,ndvi
+delete_extracted_input=True
+rgb_rhot=False
+rgb_rhos=False
+l2w_mask_threshold=0.05
+dsf_aot_estimate=fixed
+ancillary_type=GMAO_MERRA2_MET
+l1r_delete_netcdf=True
+netcdf_compression=True
+dsf_residual_glint_correction=True
+dsf_residual_glint_correction_method=default
+dsf_residual_glint_wave_range=1500,2400
+l2w_mask_water_parameters=False
+new_path=None
+output_rhorc=True

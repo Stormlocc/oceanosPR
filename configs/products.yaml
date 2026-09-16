@@ -1,0 +1,146 @@
+schema_version: "1.0"
+version: "1"
+specs:
+  - product_key: "tur_nechad2016"
+    acolite_parameter: "tur_nechad2016"
+    variable_pattern: "TUR_Nechad2016_*"
+    kind: "continuous"
+    unit: "FNU"
+    masked_by_acolite: false
+    land_masked: true
+    shallow_exclusion_m: 7
+    accepted_range: [0, 100]
+    display_range: [0, 20]
+    s2_calibrated: true
+    publish: "cog"
+    caveat: "Nechad et al. 2016 recalibration for Sentinel-2 (665 nm); not validated in situ for La Parguera; statistics exclude water shallower than 7 m (bottom reflectance)."
+  - product_key: "spm_nechad2016"
+    acolite_parameter: "spm_nechad2016"
+    variable_pattern: "SPM_Nechad2016_*"
+    kind: "continuous"
+    unit: "g m-3"
+    masked_by_acolite: false
+    land_masked: true
+    shallow_exclusion_m: 7
+    accepted_range: [0, 100]
+    display_range: [0, 20]
+    s2_calibrated: true
+    publish: "cog"
+    caveat: "Nechad et al. 2016 recalibration for Sentinel-2 (665 nm); not validated in situ for La Parguera; statistics exclude water shallower than 7 m (bottom reflectance)."
+  - product_key: "chl_re_gons740"
+    acolite_parameter: "chl_re_gons740"
+    variable_pattern: "chl_re_gons740"
+    kind: "continuous"
+    unit: "mg m-3"
+    masked_by_acolite: true
+    land_masked: true
+    shallow_exclusion_m: 7
+    accepted_range: [0, 100]
+    display_range: [0, 30]
+    s2_calibrated: true
+    publish: "cog"
+    caveat: "Red-edge algorithm (Gons et al. 2002, 740 nm variant) designed for productive waters; NOT reliable in clear oligotrophic reef water, where it returns implausibly high values (~10 mg m-3). ACOLITE masks pixels failing its own validity checks."
+  - product_key: "fai"
+    acolite_parameter: "fai"
+    variable_pattern: "fai"
+    kind: "continuous"
+    unit: "1"
+    masked_by_acolite: false
+    land_masked: false
+    shallow_exclusion_m: null
+    accepted_range: [-0.1, 0.1]
+    display_range: [-0.02, 0.02]
+    s2_calibrated: false
+    publish: "cog"
+    caveat: "Floating Algae Index (Hu 2009) computed by ACOLITE on surface reflectance, not Rayleigh-corrected reflectance: published thresholds do not transfer. An index, not sargassum detection or biomass; raised by clouds, glint, bright shallow bottom and land (values are not masked in the COG)."
+  - product_key: "fait"
+    acolite_parameter: "fait"
+    variable_pattern: "fait"
+    kind: "binary"
+    unit: "1"
+    masked_by_acolite: false
+    land_masked: false
+    shallow_exclusion_m: null
+    accepted_range: [0, 1]
+    display_range: [0, 1]
+    s2_calibrated: false
+    publish: "cog"
+    caveat: "0/1 floating-vegetation classifier (Dogliotti et al. 2018) designed for turbid water; generic, not calibrated for Sentinel-2 or clear reef water."
+  - product_key: "ndvi"
+    acolite_parameter: "ndvi"
+    variable_pattern: "ndvi"
+    kind: "continuous"
+    unit: "1"
+    masked_by_acolite: false
+    land_masked: false
+    shallow_exclusion_m: null
+    accepted_range: [-1, 1]
+    display_range: [-1, 1]
+    s2_calibrated: false
+    publish: "cog"
+    caveat: "Generic NDVI (665/835 nm) on surface reflectance; over water it indicates floating vegetation or contamination, not a water-quality quantity."
+  - product_key: "l2_flags"
+    acolite_parameter: null
+    variable_pattern: "l2_flags"
+    kind: "bitfield"
+    unit: null
+    masked_by_acolite: false
+    land_masked: false
+    shallow_exclusion_m: null
+    accepted_range: null
+    display_range: null
+    s2_calibrated: false
+    publish: "cog"
+    caveat: "ACOLITE pixel flags; bit meanings come from this run's resolved settings. Bit 0 (SWIR threshold) is informational and never excludes a pixel."
+  - product_key: "true_colour"
+    acolite_parameter: null
+    variable_pattern: "rhos_*"
+    kind: "display"
+    unit: null
+    masked_by_acolite: false
+    land_masked: false
+    shallow_exclusion_m: null
+    accepted_range: null
+    display_range: null
+    s2_calibrated: false
+    publish: "cog"
+    caveat: "Display only, not a measurement: surface reflectance B04/B03/B02 with one fixed stretch for every date."
+  - product_key: "rhow"
+    acolite_parameter: "rhow_*"
+    variable_pattern: "rhow_*"
+    kind: "continuous"
+    unit: "1"
+    masked_by_acolite: true
+    land_masked: true
+    shallow_exclusion_m: null
+    accepted_range: null
+    display_range: null
+    s2_calibrated: false
+    publish: "archive_only"
+    caveat: null
+  - product_key: "rrs"
+    acolite_parameter: "Rrs_*"
+    variable_pattern: "Rrs_*"
+    kind: "continuous"
+    unit: "sr-1"
+    masked_by_acolite: true
+    land_masked: true
+    shallow_exclusion_m: null
+    accepted_range: null
+    display_range: null
+    s2_calibrated: false
+    publish: "archive_only"
+    caveat: null
+  - product_key: "rhorc"
+    acolite_parameter: "rhorc_*"
+    variable_pattern: "rhorc_*"
+    kind: "continuous"
+    unit: "1"
+    masked_by_acolite: false
+    land_masked: false
+    shallow_exclusion_m: null
+    accepted_range: null
+    display_range: null
+    s2_calibrated: false
+    publish: "archive_only"
+    caveat: null

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from copy import deepcopy
-from datetime import datetime, timezone
-from hashlib import sha256
 import os
-from pathlib import Path
 import tempfile
+from copy import deepcopy
+from datetime import UTC, datetime
+from hashlib import sha256
+from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -18,11 +18,18 @@ from pystac.layout import HrefLayoutStrategy
 from shapely.geometry import shape
 
 from oceanos.aoi import AOI
-from oceanos.catalog.models import SceneAsset, SceneMetadata
+from oceanos.catalog.models import ProviderChecksums, SceneAsset, SceneMetadata
 
 
 class LocalCatalogError(RuntimeError):
     """The local catalog is unreadable, inconsistent, or cannot be saved."""
+
+
+def _tier_relpath(value: str) -> str:
+    path = PurePosixPath(value)
+    if path.is_absolute() or ".." in path.parts or "\\" in value or value in {"", "."}:
+        raise ValueError("catalog artifact paths must be relative to their tier root")
+    return path.as_posix()
 
 
 class _LocalIO(pystac.StacIO):
@@ -69,11 +76,11 @@ class _Layout(HrefLayoutStrategy):
 def scene_to_stac_item(
     scene: SceneMetadata,
     *,
-    source_provider: str = "Sentinel2Provider",
+    source_provider: str = "CdseODataProvider",
     ingested_at: datetime | None = None,
 ) -> pystac.Item:
     """Copy scientific metadata verbatim; add local provenance separately."""
-    registered = ingested_at if ingested_at is not None else datetime.now(timezone.utc)
+    registered = ingested_at if ingested_at is not None else datetime.now(UTC)
     if registered.tzinfo is None or registered.utcoffset() is None:
         raise ValueError("ingested_at must include a timezone")
     if not source_provider.strip():
@@ -88,7 +95,7 @@ def scene_to_stac_item(
             "oceanos:source_catalog": scene.source_catalog,
             "oceanos:original_scene_id": scene.scene_id,
             "oceanos:source_provider": source_provider,
-            "oceanos:ingested_at": registered.astimezone(timezone.utc).isoformat(),
+            "oceanos:ingested_at": registered.astimezone(UTC).isoformat(),
             "oceanos:processing_status": "discovered",
         },
     )
@@ -96,6 +103,20 @@ def scene_to_stac_item(
         item.properties["platform"] = scene.platform
     if scene.cloud_cover is not None:
         EOExtension.ext(item, add_if_missing=True).cloud_cover = scene.cloud_cover
+    optional_properties = {
+        "oceanos:processing_level": scene.processing_level,
+        "oceanos:processing_baseline": scene.processing_baseline,
+        "sat:relative_orbit": scene.relative_orbit,
+        "oceanos:datatake_id": scene.datatake_id,
+        "oceanos:overpass_id": scene.overpass_id,
+        "s2:mgrs_tile": scene.mgrs_tile,
+        "oceanos:source_id": scene.source_id,
+        "oceanos:provider_checksums": (
+            scene.checksums.model_dump(mode="json") if scene.checksums is not None else None
+        ),
+        "oceanos:online": scene.online,
+    }
+    item.properties.update({key: value for key, value in optional_properties.items() if value is not None})
     for key, asset in scene.assets.items():
         item.add_asset(key, pystac.Asset(
             href=asset.href, media_type=asset.media_type, title=asset.title,
@@ -120,6 +141,18 @@ def scene_from_stac_item(item: pystac.Item) -> SceneMetadata:
             bbox=item.bbox,
             cloud_cover=item.properties.get("eo:cloud_cover"),
             source_catalog=item.properties["oceanos:source_catalog"],
+            processing_level=item.properties.get("oceanos:processing_level"),
+            processing_baseline=item.properties.get("oceanos:processing_baseline"),
+            relative_orbit=item.properties.get("sat:relative_orbit"),
+            datatake_id=item.properties.get("oceanos:datatake_id"),
+            overpass_id=item.properties.get("oceanos:overpass_id"),
+            mgrs_tile=item.properties.get("s2:mgrs_tile"),
+            source_id=item.properties.get("oceanos:source_id"),
+            checksums=(
+                ProviderChecksums.model_validate(item.properties["oceanos:provider_checksums"])
+                if "oceanos:provider_checksums" in item.properties else None
+            ),
+            online=item.properties.get("oceanos:online"),
             assets={key: SceneAsset(
                 href=asset.href, media_type=asset.media_type, title=asset.title,
                 roles=asset.roles or [],
@@ -153,7 +186,7 @@ class LocalSceneCatalog:
     Duplicate IDs with identical metadata are no-ops; conflicts raise an error.
     """
 
-    def __init__(self, directory: str | Path = "catalog", *, collection_id: str = "sentinel-2-l2a") -> None:
+    def __init__(self, directory: str | Path = "catalog", *, collection_id: str = "sentinel-2-l1c") -> None:
         self.directory = Path(directory).expanduser().resolve()
         self.path = self.directory / "catalog.json"
         self._io = _LocalIO()
@@ -188,7 +221,7 @@ class LocalSceneCatalog:
         except (OSError, ValueError, pystac.STACError) as exc:
             raise LocalCatalogError(f"Cannot save local catalog {self.path}: {exc}") from exc
 
-    def add_scene(self, scene: SceneMetadata, *, source_provider: str = "Sentinel2Provider") -> bool:
+    def add_scene(self, scene: SceneMetadata, *, source_provider: str = "CdseODataProvider") -> bool:
         """Persist one scene; True if inserted, False if already identical."""
         catalog = self._load()
         existing = next(catalog.get_items(scene.scene_id, recursive=True), None)
@@ -245,6 +278,35 @@ class LocalSceneCatalog:
                     asset.extra_fields[f"oceanos:{field}"] = assets[key][field]
         if item.to_dict() != before:
             self._save(catalog)
+
+    def record_acquisition(
+        self, scene_id: str, *, manifest_relpath: str, archive_relpath: str,
+        file_size: int, sha256: str, provider_md5: str,
+    ) -> None:
+        """Synchronize a verified whole-SAFE acquisition onto its scene Item."""
+        manifest_relpath = _tier_relpath(manifest_relpath)
+        archive_relpath = _tier_relpath(archive_relpath)
+        catalog = self._load()
+        item = next(catalog.get_items(scene_id, recursive=True), None)
+        if item is None:
+            raise LocalCatalogError(f"Scene does not exist: {scene_id}")
+        if "product" not in item.assets:
+            raise LocalCatalogError(f"Scene has no product asset: {scene_id}")
+        item.properties.update({
+            "oceanos:materialization_status": "complete",
+            "oceanos:processing_status": "acquired",
+            "oceanos:manifest_path": manifest_relpath,
+            "oceanos:retained": True,
+            "oceanos:sha256": sha256,
+            "oceanos:provider_md5": provider_md5,
+        })
+        asset = item.assets["product"]
+        asset.extra_fields.update({
+            "oceanos:local_path": archive_relpath,
+            "oceanos:file_size": file_size,
+            "oceanos:sha256": sha256,
+        })
+        self._save(catalog)
 
     def get_stac_item(self, scene_id: str) -> pystac.Item | None:
         """Return a detached item; mutating it does not update the catalog."""

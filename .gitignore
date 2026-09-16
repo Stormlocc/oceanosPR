@@ -8,3 +8,12 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Skills locales de Codex — nunca se versionan (regla del PLAN)
+.agents/
+
+# Catalogo STAC local: estado generado por `scenes search`, no se versiona
+catalog/
+
+# Worktrees temporales de Claude Code
+.claude/worktrees/

@@ -1,0 +1,411 @@
+2026-09-14 23:53:09: Running ACOLITE processing - 20260421.0
+2026-09-14 23:53:09: Python - linux - 3.14.7 | packaged by conda-forge | (main, Sep  2 2026, 21:08:32) [GCC 15.3.0]
+2026-09-14 23:53:09: Platform - Linux 6.6.87.2-microsoft-standard-WSL2 - x86_64 - #1 SMP PREEMPT_DYNAMIC Thu Jun  5 18:30:46 UTC 2025
+2026-09-14 23:53:09: Run ID - att-20260915T035309Z-spike0001
+2026-09-14 23:53:09: Extraction error file could not be opened successfully:
+- method gz: ReadError('not a gzip file')
+- method bz2: ReadError('not a bzip2 file')
+- method xz: ReadError('not an lzma file')
+- method zst: ReadError('not a zstd file')
+- method tar: ReadError('invalid header'), <class 'tarfile.ReadError'>
+2026-09-14 23:53:09: Extracting 66 files from /home/antho/projects/oceanosPR/.work/oceanos-pr-mvp/spikes/safe/S2B_MSIL1C_20260913T150719_N0512_R082_T19QGV_20260913T200147.zip to /home/antho/projects/oceanosPR/.work/oceanos-pr-mvp/spikes/run_b2_valid/
+2026-09-14 23:53:11: Extraction of 66 files completed to /home/antho/projects/oceanosPR/.work/oceanos-pr-mvp/spikes/run_b2_valid/
+2026-09-14 23:53:11: /home/antho/projects/oceanosPR/.work/oceanos-pr-mvp/spikes/run_b2_valid/S2B_MSIL1C_20260913T150719_N0512_R082_T19QGV_20260913T200147.SAFE
+2026-09-14 23:53:11: Identified /home/antho/projects/oceanosPR/.work/oceanos-pr-mvp/spikes/safe/S2B_MSIL1C_20260913T150719_N0512_R082_T19QGV_20260913T200147.zip as Sentinel-2 .SAFE type
+2026-09-14 23:53:11: Starting conversion of 1 scenes
+2026-09-14 23:53:11: Starting conversion of /home/antho/projects/oceanosPR/.work/oceanos-pr-mvp/spikes/run_b2_valid/S2B_MSIL1C_20260913T150719_N0512_R082_T19QGV_20260913T200147.SAFE
+2026-09-14 23:53:11: Importing metadata from L1C_T19QGV_A049729_20260913T150740
+2026-09-14 23:53:11: Reading per pixel geometry
+2026-09-14 23:53:12: Computing band average per detector geometry
+2026-09-14 23:53:12: Detector 5
+2026-09-14 23:53:12: Detector 6
+2026-09-14 23:53:12: Detector 7
+2026-09-14 23:53:12: Detector 8
+2026-09-14 23:53:12: Detector 9
+2026-09-14 23:53:12: Detector 10
+2026-09-14 23:53:12: Wrote raa (1126, 1605)
+2026-09-14 23:53:13: Wrote vza (1126, 1605)
+2026-09-14 23:53:13: Wrote sza (1126, 1605)
+2026-09-14 23:53:13: Writing geolocation lon/lat
+2026-09-14 23:53:13: Wrote lon (1126, 1605)
+2026-09-14 23:53:13: Wrote lat (1126, 1605)
+2026-09-14 23:53:13: Converting bands
+2026-09-14 23:53:13: Converting bands: Wrote rhot_442 ((1126, 1605))
+2026-09-14 23:53:13: Converting bands: Wrote rhot_492 ((1126, 1605))
+2026-09-14 23:53:13: Converting bands: Wrote rhot_559 ((1126, 1605))
+2026-09-14 23:53:13: Converting bands: Wrote rhot_665 ((1126, 1605))
+2026-09-14 23:53:14: Converting bands: Wrote rhot_704 ((1126, 1605))
+2026-09-14 23:53:14: Converting bands: Wrote rhot_739 ((1126, 1605))
+2026-09-14 23:53:14: Converting bands: Wrote rhot_780 ((1126, 1605))
+2026-09-14 23:53:14: Converting bands: Wrote rhot_833 ((1126, 1605))
+2026-09-14 23:53:14: Converting bands: Wrote rhot_864 ((1126, 1605))
+2026-09-14 23:53:14: Converting bands: Wrote rhot_943 ((1126, 1605))
+2026-09-14 23:53:14: Converting bands: Wrote rhot_1377 ((1126, 1605))
+2026-09-14 23:53:15: Converting bands: Wrote rhot_1610 ((1126, 1605))
+2026-09-14 23:53:15: Converting bands: Wrote rhot_2186 ((1126, 1605))
+2026-09-14 23:53:15: Conversion took 3.5 seconds
+2026-09-14 23:53:15: Created /home/antho/projects/oceanosPR/.work/oceanos-pr-mvp/spikes/run_b2_valid/S2B_MSI_2026_09_13_15_08_01_T19QGV_L1R.nc
+2026-09-14 23:53:15: Deleting /home/antho/projects/oceanosPR/.work/oceanos-pr-mvp/spikes/run_b2_valid/S2B_MSIL1C_20260913T150719_N0512_R082_T19QGV_20260913T200147.SAFE
+2026-09-14 23:53:15: Running acolite for /home/antho/projects/oceanosPR/.work/oceanos-pr-mvp/spikes/run_b2_valid/S2B_MSI_2026_09_13_15_08_01_T19QGV_L1R.nc
+2026-09-14 23:53:15: Getting ancillary data for 2026-09-13T15:08:01.074090+00:00 -67.025E 17.950N
+2026-09-14 23:53:15: Downloading file GMAO_MERRA2.20260913T150000.MET.nc
+2026-09-14 23:53:17: Retrying...
+2026-09-14 23:53:19: Downloading file GMAO_MERRA2.20260913T150000.MET.nc failed
+2026-09-14 23:53:19: Downloading file GMAO_MERRA2.20260913T160000.MET.nc
+2026-09-14 23:53:22: Retrying...
+2026-09-14 23:53:24: Downloading file GMAO_MERRA2.20260913T160000.MET.nc failed
+2026-09-14 23:53:24: No ozone file found for 2026-09-13T15:08:01.074090+00:00
+2026-09-14 23:53:24: No NCEP files found for 2026-09-13T15:08:01.074090+00:00
+2026-09-14 23:53:24: default uoz: 0.30 uwv: 1.50 pressure: 1013.25
+2026-09-14 23:53:24: current uoz: 0.30 uwv: 1.50 pressure: 1013.25
+2026-09-14 23:53:27: Using DSF atmospheric correction
+2026-09-14 23:53:27: Writing lon
+2026-09-14 23:53:27: Wrote lon (1126, 1605)
+2026-09-14 23:53:27: Writing lat
+2026-09-14 23:53:27: Wrote lat (1126, 1605)
+2026-09-14 23:53:27: Writing sza
+2026-09-14 23:53:27: Wrote sza (1126, 1605)
+2026-09-14 23:53:27: Writing vza
+2026-09-14 23:53:27: Wrote vza (1126, 1605)
+2026-09-14 23:53:27: Writing raa
+2026-09-14 23:53:27: Wrote raa (1126, 1605)
+2026-09-14 23:53:27: Loading LUTs ['ACOLITE-LUT-202110-MOD1', 'ACOLITE-LUT-202110-MOD2']
+2026-09-14 23:53:31: Loading LUTs took 3.9 s
+2026-09-14 23:53:31: Running AOT estimation for band 1 (rhot_442)
+2026-09-14 23:53:31: 1
+2026-09-14 23:53:31: intercept
+2026-09-14 23:53:31: 0.218
+2026-09-14 23:53:31: S2B_MSI/B1 ACOLITE-LUT-202110-MOD1 took 0.001s (StdLUT)
+2026-09-14 23:53:31: S2B_MSI/B1 ACOLITE-LUT-202110-MOD2 took 0.001s (StdLUT)
+2026-09-14 23:53:31: Running AOT estimation for band 2 (rhot_492)
+2026-09-14 23:53:31: 2
+2026-09-14 23:53:31: intercept
+2026-09-14 23:53:31: 0.185
+2026-09-14 23:53:31: S2B_MSI/B2 ACOLITE-LUT-202110-MOD1 took 0.001s (StdLUT)
+2026-09-14 23:53:31: S2B_MSI/B2 ACOLITE-LUT-202110-MOD2 took 0.001s (StdLUT)
+2026-09-14 23:53:31: Running AOT estimation for band 3 (rhot_559)
+2026-09-14 23:53:31: 3
+2026-09-14 23:53:31: intercept
+2026-09-14 23:53:31: 0.158
+2026-09-14 23:53:31: S2B_MSI/B3 ACOLITE-LUT-202110-MOD1 took 0.001s (StdLUT)
+2026-09-14 23:53:31: S2B_MSI/B3 ACOLITE-LUT-202110-MOD2 took 0.001s (StdLUT)
+2026-09-14 23:53:31: Running AOT estimation for band 4 (rhot_665)
+2026-09-14 23:53:31: 4
+2026-09-14 23:53:31: intercept
+2026-09-14 23:53:31: 0.139
+2026-09-14 23:53:31: S2B_MSI/B4 ACOLITE-LUT-202110-MOD1 took 0.001s (StdLUT)
+2026-09-14 23:53:31: S2B_MSI/B4 ACOLITE-LUT-202110-MOD2 took 0.001s (StdLUT)
+2026-09-14 23:53:31: Running AOT estimation for band 5 (rhot_704)
+2026-09-14 23:53:31: 5
+2026-09-14 23:53:31: intercept
+2026-09-14 23:53:31: 0.133
+2026-09-14 23:53:31: S2B_MSI/B5 ACOLITE-LUT-202110-MOD1 took 0.002s (StdLUT)
+2026-09-14 23:53:31: S2B_MSI/B5 ACOLITE-LUT-202110-MOD2 took 0.001s (StdLUT)
+2026-09-14 23:53:31: Running AOT estimation for band 6 (rhot_739)
+2026-09-14 23:53:31: 6
+2026-09-14 23:53:31: intercept
+2026-09-14 23:53:31: 0.133
+2026-09-14 23:53:31: S2B_MSI/B6 ACOLITE-LUT-202110-MOD1 took 0.001s (StdLUT)
+2026-09-14 23:53:31: S2B_MSI/B6 ACOLITE-LUT-202110-MOD2 took 0.001s (StdLUT)
+2026-09-14 23:53:31: Running AOT estimation for band 7 (rhot_780)
+2026-09-14 23:53:32: 7
+2026-09-14 23:53:32: intercept
+2026-09-14 23:53:32: 0.136
+2026-09-14 23:53:32: S2B_MSI/B7 ACOLITE-LUT-202110-MOD1 took 0.001s (StdLUT)
+2026-09-14 23:53:32: S2B_MSI/B7 ACOLITE-LUT-202110-MOD2 took 0.001s (StdLUT)
+2026-09-14 23:53:32: Running AOT estimation for band 8 (rhot_833)
+2026-09-14 23:53:32: 8
+2026-09-14 23:53:32: intercept
+2026-09-14 23:53:32: 0.131
+2026-09-14 23:53:32: S2B_MSI/B8 ACOLITE-LUT-202110-MOD1 took 0.001s (StdLUT)
+2026-09-14 23:53:32: S2B_MSI/B8 ACOLITE-LUT-202110-MOD2 took 0.001s (StdLUT)
+2026-09-14 23:53:32: Running AOT estimation for band 8A (rhot_864)
+2026-09-14 23:53:32: 8A
+2026-09-14 23:53:32: intercept
+2026-09-14 23:53:32: 0.133
+2026-09-14 23:53:32: S2B_MSI/B8A ACOLITE-LUT-202110-MOD1 took 0.001s (StdLUT)
+2026-09-14 23:53:32: S2B_MSI/B8A ACOLITE-LUT-202110-MOD2 took 0.001s (StdLUT)
+2026-09-14 23:53:32: Choosing best fitting model: min_drmsd (2 bands)
+2026-09-14 23:53:32: Computing RMSD for model ACOLITE-LUT-202110-MOD1
+2026-09-14 23:53:32: Computing RMSD for model ACOLITE-LUT-202110-MOD1: 1.2488e-01
+2026-09-14 23:53:32: Computing RMSD for model ACOLITE-LUT-202110-MOD2
+2026-09-14 23:53:32: Computing RMSD for model ACOLITE-LUT-202110-MOD2: 1.2480e-01
+2026-09-14 23:53:32: Selected model ACOLITE-LUT-202110-MOD2: aot 0.010, RMSD 1.25e-01
+2026-09-14 23:53:32: Reshaping pressure to 1126x1605
+2026-09-14 23:53:32: Reshaping wind to 1126x1605
+2026-09-14 23:53:32: use_revlut
+2026-09-14 23:53:32: True
+2026-09-14 23:53:32: Wrote rhot_442 (1126, 1605)
+2026-09-14 23:53:32: Computing surface reflectance
+2026-09-14 23:53:32: 1
+2026-09-14 23:53:32: 442
+2026-09-14 23:53:32: 0.998
+2026-09-14 23:53:58: Wrote rhorc_442 (1126, 1605)
+2026-09-14 23:53:58: Wrote rhos_442 (1126, 1605)
+2026-09-14 23:53:58: S2B_MSI/B1 took 25.8s (RevLUT)
+2026-09-14 23:53:58: Wrote rhot_492 (1126, 1605)
+2026-09-14 23:53:58: Computing surface reflectance
+2026-09-14 23:53:58: 2
+2026-09-14 23:53:58: 492
+2026-09-14 23:53:58: 0.984
+2026-09-14 23:54:26: Wrote rhorc_492 (1126, 1605)
+2026-09-14 23:54:26: Wrote rhos_492 (1126, 1605)
+2026-09-14 23:54:26: S2B_MSI/B2 took 28.2s (RevLUT)
+2026-09-14 23:54:26: Wrote rhot_559 (1126, 1605)
+2026-09-14 23:54:26: Computing surface reflectance
+2026-09-14 23:54:26: 3
+2026-09-14 23:54:26: 559
+2026-09-14 23:54:26: 0.935
+2026-09-14 23:54:52: Wrote rhorc_559 (1126, 1605)
+2026-09-14 23:54:52: Wrote rhos_559 (1126, 1605)
+2026-09-14 23:54:52: S2B_MSI/B3 took 26.5s (RevLUT)
+2026-09-14 23:54:53: Wrote rhot_665 (1126, 1605)
+2026-09-14 23:54:53: Computing surface reflectance
+2026-09-14 23:54:53: 4
+2026-09-14 23:54:53: 665
+2026-09-14 23:54:53: 0.962
+2026-09-14 23:55:20: Wrote rhorc_665 (1126, 1605)
+2026-09-14 23:55:20: Wrote rhos_665 (1126, 1605)
+2026-09-14 23:55:20: S2B_MSI/B4 took 27.5s (RevLUT)
+2026-09-14 23:55:20: Wrote rhot_704 (1126, 1605)
+2026-09-14 23:55:20: Computing surface reflectance
+2026-09-14 23:55:20: 5
+2026-09-14 23:55:20: 704
+2026-09-14 23:55:20: 0.954
+2026-09-14 23:55:47: Wrote rhorc_704 (1126, 1605)
+2026-09-14 23:55:47: Wrote rhos_704 (1126, 1605)
+2026-09-14 23:55:47: S2B_MSI/B5 took 27.2s (RevLUT)
+2026-09-14 23:55:47: Wrote rhot_739 (1126, 1605)
+2026-09-14 23:55:47: Computing surface reflectance
+2026-09-14 23:55:47: 6
+2026-09-14 23:55:47: 739
+2026-09-14 23:55:47: 0.955
+2026-09-14 23:56:13: Wrote rhorc_739 (1126, 1605)
+2026-09-14 23:56:13: Wrote rhos_739 (1126, 1605)
+2026-09-14 23:56:13: S2B_MSI/B6 took 25.3s (RevLUT)
+2026-09-14 23:56:13: Wrote rhot_780 (1126, 1605)
+2026-09-14 23:56:13: Computing surface reflectance
+2026-09-14 23:56:13: 7
+2026-09-14 23:56:13: 780
+2026-09-14 23:56:13: 0.987
+2026-09-14 23:56:40: Wrote rhorc_780 (1126, 1605)
+2026-09-14 23:56:40: Wrote rhos_780 (1126, 1605)
+2026-09-14 23:56:40: S2B_MSI/B7 took 27.5s (RevLUT)
+2026-09-14 23:56:40: Wrote rhot_833 (1126, 1605)
+2026-09-14 23:56:40: Computing surface reflectance
+2026-09-14 23:56:40: 8
+2026-09-14 23:56:40: 833
+2026-09-14 23:56:40: 0.945
+2026-09-14 23:57:08: Wrote rhorc_833 (1126, 1605)
+2026-09-14 23:57:08: Wrote rhos_833 (1126, 1605)
+2026-09-14 23:57:08: S2B_MSI/B8 took 27.3s (RevLUT)
+2026-09-14 23:57:08: Wrote rhot_864 (1126, 1605)
+2026-09-14 23:57:08: Computing surface reflectance
+2026-09-14 23:57:08: 8A
+2026-09-14 23:57:08: 864
+2026-09-14 23:57:08: 0.997
+2026-09-14 23:57:35: Wrote rhorc_864 (1126, 1605)
+2026-09-14 23:57:35: Wrote rhos_864 (1126, 1605)
+2026-09-14 23:57:35: S2B_MSI/B8A took 27.2s (RevLUT)
+2026-09-14 23:57:35: Wrote rhot_943 (1126, 1605)
+2026-09-14 23:57:35: Band 9 at 943 nm has tgas < min_tgas_rho (0.30 < 0.70)
+2026-09-14 23:57:35: Wrote rhot_1377 (1126, 1605)
+2026-09-14 23:57:35: Band 10 at 1377 nm has tgas < min_tgas_rho (0.01 < 0.70)
+2026-09-14 23:57:35: Wrote rhot_1610 (1126, 1605)
+2026-09-14 23:57:35: Computing surface reflectance
+2026-09-14 23:57:35: 11
+2026-09-14 23:57:35: 1610
+2026-09-14 23:57:35: 0.964
+2026-09-14 23:57:59: Wrote rhorc_1610 (1126, 1605)
+2026-09-14 23:58:00: Wrote rhos_1610 (1126, 1605)
+2026-09-14 23:58:00: S2B_MSI/B11 took 24.4s (RevLUT)
+2026-09-14 23:58:00: Wrote rhot_2186 (1126, 1605)
+2026-09-14 23:58:00: Computing surface reflectance
+2026-09-14 23:58:00: 12
+2026-09-14 23:58:00: 2186
+2026-09-14 23:58:00: 0.926
+2026-09-14 23:58:27: Wrote rhorc_2186 (1126, 1605)
+2026-09-14 23:58:27: Wrote rhos_2186 (1126, 1605)
+2026-09-14 23:58:27: S2B_MSI/B12 took 27.2s (RevLUT)
+2026-09-14 23:58:27: Starting glint correction
+2026-09-14 23:58:27: Performing glint correction for band 1 (442 nm)
+2026-09-14 23:58:27: Wrote rhos_442 (1126, 1605)
+2026-09-14 23:58:27: Performing glint correction for band 2 (492 nm)
+2026-09-14 23:58:27: Wrote rhos_492 (1126, 1605)
+2026-09-14 23:58:27: Performing glint correction for band 3 (559 nm)
+2026-09-14 23:58:27: Wrote rhos_559 (1126, 1605)
+2026-09-14 23:58:27: Performing glint correction for band 4 (665 nm)
+2026-09-14 23:58:27: Wrote rhos_665 (1126, 1605)
+2026-09-14 23:58:28: Performing glint correction for band 5 (704 nm)
+2026-09-14 23:58:28: Wrote rhos_704 (1126, 1605)
+2026-09-14 23:58:28: Performing glint correction for band 6 (739 nm)
+2026-09-14 23:58:28: Wrote rhos_739 (1126, 1605)
+2026-09-14 23:58:28: Performing glint correction for band 7 (780 nm)
+2026-09-14 23:58:28: Wrote rhos_780 (1126, 1605)
+2026-09-14 23:58:28: Performing glint correction for band 8 (833 nm)
+2026-09-14 23:58:28: Wrote rhos_833 (1126, 1605)
+2026-09-14 23:58:28: Performing glint correction for band 8A (864 nm)
+2026-09-14 23:58:28: Wrote rhos_864 (1126, 1605)
+2026-09-14 23:58:28: Performing glint correction for band 11 (1610 nm)
+2026-09-14 23:58:28: Wrote rhos_1610 (1126, 1605)
+2026-09-14 23:58:29: Performing glint correction for band 12 (2186 nm)
+2026-09-14 23:58:29: Wrote rhos_2186 (1126, 1605)
+2026-09-14 23:58:29: Wrote /home/antho/projects/oceanosPR/.work/oceanos-pr-mvp/spikes/run_b2_valid/S2B_MSI_2026_09_13_15_08_01_T19QGV_L2R.nc
+2026-09-14 23:58:29: L2W keeping data in memory: False
+2026-09-14 23:58:29: rhot datasets:
+2026-09-14 23:58:29: ['rhot_442', 'rhot_492', 'rhot_559', 'rhot_665', 'rhot_704', 'rhot_739', 'rhot_780', 'rhot_833', 'rhot_864', 'rhot_943', 'rhot_1377', 'rhot_1610', 'rhot_2186']
+2026-09-14 23:58:29: rhot wavelengths:
+2026-09-14 23:58:29: [442, 492, 559, 665, 704, 739, 780, 833, 864, 943, 1377, 1610, 2186]
+2026-09-14 23:58:29: rhos datasets:
+2026-09-14 23:58:29: ['rhos_442', 'rhos_492', 'rhos_559', 'rhos_665', 'rhos_704', 'rhos_739', 'rhos_780', 'rhos_833', 'rhos_864', 'rhos_1610', 'rhos_2186']
+2026-09-14 23:58:29: rhos wavelengths:
+2026-09-14 23:58:29: [442, 492, 559, 665, 704, 739, 780, 833, 864, 1610, 2186]
+2026-09-14 23:58:29: Running ACOLITE flagging function for /home/antho/projects/oceanosPR/.work/oceanos-pr-mvp/spikes/run_b2_valid/S2B_MSI_2026_09_13_15_08_01_T19QGV_L2R.nc.
+2026-09-14 23:58:29: Computing non water threshold mask.
+2026-09-14 23:58:29: Computing non water threshold mask from rhot_1610 > 0.05.
+2026-09-14 23:58:29: Computing cirrus mask.
+2026-09-14 23:58:29: Computing cirrus mask from rhot_1377 > 0.005.
+2026-09-14 23:58:29: Computing TOA limit mask.
+2026-09-14 23:58:29: Computing TOA limit mask from rhot_442 > 0.3.
+2026-09-14 23:58:29: Computing TOA limit mask from rhot_492 > 0.3.
+2026-09-14 23:58:29: Computing TOA limit mask from rhot_559 > 0.3.
+2026-09-14 23:58:29: Computing TOA limit mask from rhot_665 > 0.3.
+2026-09-14 23:58:29: Computing TOA limit mask from rhot_704 > 0.3.
+2026-09-14 23:58:29: Computing TOA limit mask from rhot_739 > 0.3.
+2026-09-14 23:58:30: Computing TOA limit mask from rhot_780 > 0.3.
+2026-09-14 23:58:30: Computing TOA limit mask from rhot_833 > 0.3.
+2026-09-14 23:58:30: Computing TOA limit mask from rhot_864 > 0.3.
+2026-09-14 23:58:30: Computing TOA limit mask from rhot_943 > 0.3.
+2026-09-14 23:58:30: Computing TOA limit mask from rhot_1377 > 0.3.
+2026-09-14 23:58:30: Computing TOA limit mask from rhot_1610 > 0.3.
+2026-09-14 23:58:30: Computing TOA limit mask from rhot_2186 > 0.3.
+2026-09-14 23:58:30: Computing negative reflectance mask.
+2026-09-14 23:58:30: Computing negative reflectance mask from rhos_442.
+2026-09-14 23:58:30: Computing negative reflectance mask from rhos_492.
+2026-09-14 23:58:30: Computing negative reflectance mask from rhos_559.
+2026-09-14 23:58:30: Computing negative reflectance mask from rhos_665.
+2026-09-14 23:58:30: Computing negative reflectance mask from rhos_704.
+2026-09-14 23:58:30: Computing negative reflectance mask from rhos_739.
+2026-09-14 23:58:30: Computing negative reflectance mask from rhos_780.
+2026-09-14 23:58:30: Computing negative reflectance mask from rhos_833.
+2026-09-14 23:58:31: Computing negative reflectance mask from rhos_864.
+2026-09-14 23:58:31: Copying datasets from L2R.
+2026-09-14 23:58:31: Copying lon, base dataset lon
+2026-09-14 23:58:31: Writing lon
+2026-09-14 23:58:31: Wrote lon (1126, 1605)
+2026-09-14 23:58:31: Copying lat, base dataset lat
+2026-09-14 23:58:31: Writing lat
+2026-09-14 23:58:31: Wrote lat (1126, 1605)
+2026-09-14 23:58:31: Copying rhorc_442, base dataset rhorc_442
+2026-09-14 23:58:31: Writing rhorc_442
+2026-09-14 23:58:31: Wrote rhorc_442 (1126, 1605)
+2026-09-14 23:58:31: Copying rhow_442, base dataset rhos_442
+2026-09-14 23:58:31: Writing rhow_442
+2026-09-14 23:58:31: Wrote rhow_442 (1126, 1605)
+2026-09-14 23:58:31: Copying Rrs_442, base dataset rhos_442
+2026-09-14 23:58:31: Writing Rrs_442
+2026-09-14 23:58:31: Wrote Rrs_442 (1126, 1605)
+2026-09-14 23:58:31: Copying rhorc_492, base dataset rhorc_492
+2026-09-14 23:58:31: Writing rhorc_492
+2026-09-14 23:58:31: Wrote rhorc_492 (1126, 1605)
+2026-09-14 23:58:31: Copying rhow_492, base dataset rhos_492
+2026-09-14 23:58:31: Writing rhow_492
+2026-09-14 23:58:31: Wrote rhow_492 (1126, 1605)
+2026-09-14 23:58:31: Copying Rrs_492, base dataset rhos_492
+2026-09-14 23:58:31: Writing Rrs_492
+2026-09-14 23:58:31: Wrote Rrs_492 (1126, 1605)
+2026-09-14 23:58:31: Copying rhorc_559, base dataset rhorc_559
+2026-09-14 23:58:31: Writing rhorc_559
+2026-09-14 23:58:31: Wrote rhorc_559 (1126, 1605)
+2026-09-14 23:58:31: Copying rhow_559, base dataset rhos_559
+2026-09-14 23:58:31: Writing rhow_559
+2026-09-14 23:58:31: Wrote rhow_559 (1126, 1605)
+2026-09-14 23:58:31: Copying Rrs_559, base dataset rhos_559
+2026-09-14 23:58:31: Writing Rrs_559
+2026-09-14 23:58:31: Wrote Rrs_559 (1126, 1605)
+2026-09-14 23:58:31: Copying rhorc_665, base dataset rhorc_665
+2026-09-14 23:58:31: Writing rhorc_665
+2026-09-14 23:58:31: Wrote rhorc_665 (1126, 1605)
+2026-09-14 23:58:32: Copying rhow_665, base dataset rhos_665
+2026-09-14 23:58:32: Writing rhow_665
+2026-09-14 23:58:32: Wrote rhow_665 (1126, 1605)
+2026-09-14 23:58:32: Copying Rrs_665, base dataset rhos_665
+2026-09-14 23:58:32: Writing Rrs_665
+2026-09-14 23:58:32: Wrote Rrs_665 (1126, 1605)
+2026-09-14 23:58:32: Copying rhorc_704, base dataset rhorc_704
+2026-09-14 23:58:32: Writing rhorc_704
+2026-09-14 23:58:32: Wrote rhorc_704 (1126, 1605)
+2026-09-14 23:58:32: Copying rhow_704, base dataset rhos_704
+2026-09-14 23:58:32: Writing rhow_704
+2026-09-14 23:58:32: Wrote rhow_704 (1126, 1605)
+2026-09-14 23:58:32: Copying Rrs_704, base dataset rhos_704
+2026-09-14 23:58:32: Writing Rrs_704
+2026-09-14 23:58:32: Wrote Rrs_704 (1126, 1605)
+2026-09-14 23:58:32: Copying rhorc_739, base dataset rhorc_739
+2026-09-14 23:58:32: Writing rhorc_739
+2026-09-14 23:58:32: Wrote rhorc_739 (1126, 1605)
+2026-09-14 23:58:32: Copying rhow_739, base dataset rhos_739
+2026-09-14 23:58:32: Writing rhow_739
+2026-09-14 23:58:32: Wrote rhow_739 (1126, 1605)
+2026-09-14 23:58:32: Copying Rrs_739, base dataset rhos_739
+2026-09-14 23:58:32: Writing Rrs_739
+2026-09-14 23:58:32: Wrote Rrs_739 (1126, 1605)
+2026-09-14 23:58:32: Copying rhorc_780, base dataset rhorc_780
+2026-09-14 23:58:32: Writing rhorc_780
+2026-09-14 23:58:32: Wrote rhorc_780 (1126, 1605)
+2026-09-14 23:58:32: Copying rhow_780, base dataset rhos_780
+2026-09-14 23:58:32: Writing rhow_780
+2026-09-14 23:58:32: Wrote rhow_780 (1126, 1605)
+2026-09-14 23:58:32: Copying Rrs_780, base dataset rhos_780
+2026-09-14 23:58:32: Writing Rrs_780
+2026-09-14 23:58:32: Wrote Rrs_780 (1126, 1605)
+2026-09-14 23:58:33: Copying rhorc_833, base dataset rhorc_833
+2026-09-14 23:58:33: Writing rhorc_833
+2026-09-14 23:58:33: Wrote rhorc_833 (1126, 1605)
+2026-09-14 23:58:33: Copying rhow_833, base dataset rhos_833
+2026-09-14 23:58:33: Writing rhow_833
+2026-09-14 23:58:33: Wrote rhow_833 (1126, 1605)
+2026-09-14 23:58:33: Copying Rrs_833, base dataset rhos_833
+2026-09-14 23:58:33: Writing Rrs_833
+2026-09-14 23:58:33: Wrote Rrs_833 (1126, 1605)
+2026-09-14 23:58:33: Copying rhorc_864, base dataset rhorc_864
+2026-09-14 23:58:33: Writing rhorc_864
+2026-09-14 23:58:33: Wrote rhorc_864 (1126, 1605)
+2026-09-14 23:58:33: Copying rhow_864, base dataset rhos_864
+2026-09-14 23:58:33: Writing rhow_864
+2026-09-14 23:58:33: Wrote rhow_864 (1126, 1605)
+2026-09-14 23:58:33: Copying Rrs_864, base dataset rhos_864
+2026-09-14 23:58:33: Writing Rrs_864
+2026-09-14 23:58:33: Wrote Rrs_864 (1126, 1605)
+2026-09-14 23:58:33: Copying rhorc_1610, base dataset rhorc_1610
+2026-09-14 23:58:33: Writing rhorc_1610
+2026-09-14 23:58:33: Wrote rhorc_1610 (1126, 1605)
+2026-09-14 23:58:33: Copying rhow_1610, base dataset rhos_1610
+2026-09-14 23:58:33: Writing rhow_1610
+2026-09-14 23:58:33: Wrote rhow_1610 (1126, 1605)
+2026-09-14 23:58:33: Copying Rrs_1610, base dataset rhos_1610
+2026-09-14 23:58:33: Writing Rrs_1610
+2026-09-14 23:58:33: Wrote Rrs_1610 (1126, 1605)
+2026-09-14 23:58:33: Copying rhorc_2186, base dataset rhorc_2186
+2026-09-14 23:58:33: Writing rhorc_2186
+2026-09-14 23:58:33: Wrote rhorc_2186 (1126, 1605)
+2026-09-14 23:58:34: Copying rhow_2186, base dataset rhos_2186
+2026-09-14 23:58:34: Writing rhow_2186
+2026-09-14 23:58:34: Wrote rhow_2186 (1126, 1605)
+2026-09-14 23:58:34: Copying Rrs_2186, base dataset rhos_2186
+2026-09-14 23:58:34: Writing Rrs_2186
+2026-09-14 23:58:34: Wrote Rrs_2186 (1126, 1605)
+2026-09-14 23:58:34: Wrote l2_flags (1126, 1605)
+2026-09-14 23:58:34: Writing TUR_Nechad2016_665
+2026-09-14 23:58:34: Wrote TUR_Nechad2016_665 (1126, 1605)
+2026-09-14 23:58:34: Writing SPM_Nechad2016_665
+2026-09-14 23:58:34: Wrote SPM_Nechad2016_665 (1126, 1605)
+2026-09-14 23:58:34: Writing chl_re_gons740
+2026-09-14 23:58:34: Wrote chl_re_gons740 (1126, 1605)
+2026-09-14 23:58:34: Writing fai
+2026-09-14 23:58:34: Wrote fai (1126, 1605)
+2026-09-14 23:58:34: Writing fait
+2026-09-14 23:58:34: Wrote fait (1126, 1605)
+2026-09-14 23:58:34: Writing ndvi
+2026-09-14 23:58:34: Wrote ndvi (1126, 1605)
+2026-09-14 23:58:35: Wrote /home/antho/projects/oceanosPR/.work/oceanos-pr-mvp/spikes/run_b2_valid/S2B_MSI_2026_09_13_15_08_01_T19QGV_L2W.nc

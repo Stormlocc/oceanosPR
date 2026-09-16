@@ -1,5 +1,9 @@
-"""Controlled local materialization of cataloged scene assets."""
+"""Verified whole-SAFE acquisition."""
 
-from oceanos.ingestion.fetch import MVP_BANDS, MaterializationError, SceneManifest, fetch_scene
+from oceanos.ingestion.fetch import (
+    AcquisitionError,
+    SceneManifest,
+    acquire_scene,
+)
 
-__all__ = ["MVP_BANDS", "MaterializationError", "SceneManifest", "fetch_scene"]
+__all__ = ["AcquisitionError", "SceneManifest", "acquire_scene"]

@@ -1,0 +1,19 @@
+2026-09-14 20:50:38: Running ACOLITE processing - 20260421.0
+2026-09-14 20:50:38: Python - linux - 3.14.7 | packaged by conda-forge | (main, Sep  2 2026, 21:08:32) [GCC 15.3.0]
+2026-09-14 20:50:38: Platform - Linux 6.6.87.2-microsoft-standard-WSL2 - x86_64 - #1 SMP PREEMPT_DYNAMIC Thu Jun  5 18:30:46 UTC 2025
+2026-09-14 20:50:38: Run ID - att-20260915T005037Z-spike0001
+2026-09-14 20:50:38: Extraction error file could not be opened successfully:
+- method gz: ReadError('not a gzip file')
+- method bz2: ReadError('not a bzip2 file')
+- method xz: ReadError('not an lzma file')
+- method zst: ReadError('not a zstd file')
+- method tar: ReadError('invalid header'), <class 'tarfile.ReadError'>
+2026-09-14 20:50:38: Extracting 66 files from /home/antho/projects/oceanosPR/.work/oceanos-pr-mvp/spikes/safe/S2A_MSIL1C_20260702T150741_N0512_R082_T19QGV_20260702T214456.zip to /home/antho/projects/oceanosPR/.work/oceanos-pr-mvp/spikes/run_e_valid/
+2026-09-14 20:50:42: Extraction of 66 files completed to /home/antho/projects/oceanosPR/.work/oceanos-pr-mvp/spikes/run_e_valid/
+2026-09-14 20:50:42: /home/antho/projects/oceanosPR/.work/oceanos-pr-mvp/spikes/run_e_valid/S2A_MSIL1C_20260702T150741_N0512_R082_T19QGV_20260702T214456.SAFE
+2026-09-14 20:50:42: Identified /home/antho/projects/oceanosPR/.work/oceanos-pr-mvp/spikes/safe/S2A_MSIL1C_20260702T150741_N0512_R082_T19QGV_20260702T214456.zip as Sentinel-2 .SAFE type
+2026-09-14 20:50:42: Starting conversion of 1 scenes
+2026-09-14 20:50:42: Starting conversion of /home/antho/projects/oceanosPR/.work/oceanos-pr-mvp/spikes/run_e_valid/S2A_MSIL1C_20260702T150741_N0512_R082_T19QGV_20260702T214456.SAFE
+2026-09-14 20:50:42: Importing metadata from L1C_T19QGV_A057594_20260702T150737
+2026-09-14 20:50:42: Longitude limits outside /home/antho/projects/oceanosPR/.work/oceanos-pr-mvp/spikes/run_e_valid/S2A_MSIL1C_20260702T150741_N0512_R082_T19QGV_20260702T214456.SAFE
+2026-09-14 20:50:42: Deleting /home/antho/projects/oceanosPR/.work/oceanos-pr-mvp/spikes/run_e_valid/S2A_MSIL1C_20260702T150741_N0512_R082_T19QGV_20260702T214456.SAFE

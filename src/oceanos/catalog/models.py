@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime as DateTime, timezone
 import json
+from datetime import UTC
+from datetime import datetime as DateTime
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -37,6 +38,13 @@ class SceneAsset(MetadataModel):
     file_size: int | None = Field(default=None, ge=0)
 
 
+class ProviderChecksums(MetadataModel):
+    """Checksums published by CDSE; BLAKE3 is recorded but not verified."""
+
+    md5: str | None = Field(default=None, pattern=r"^[0-9a-fA-F]{32}$")
+    blake3: str | None = Field(default=None, pattern=r"^[0-9a-fA-F]{64}$")
+
+
 class SceneMetadata(MetadataModel):
     scene_id: str = Field(min_length=1)
     collection: str = Field(min_length=1)
@@ -47,17 +55,26 @@ class SceneMetadata(MetadataModel):
     cloud_cover: float | None = Field(default=None, ge=0, le=100)
     assets: dict[str, SceneAsset] = Field(default_factory=dict)
     source_catalog: str = Field(min_length=1)
+    processing_level: str | None = None
+    processing_baseline: str | None = None
+    relative_orbit: int | None = Field(default=None, ge=0)
+    datatake_id: str | None = None
+    overpass_id: str | None = None
+    mgrs_tile: str | None = None
+    source_id: str | None = None
+    checksums: ProviderChecksums | None = None
+    online: bool | None = None
 
     @field_validator("datetime")
     @classmethod
     def utc_datetime(cls, value: DateTime) -> DateTime:
-        return value.astimezone(timezone.utc)
+        return value.astimezone(UTC)
 
 
 class SceneSearchResult(MetadataModel):
     """Versioned serialization contract for downstream consumers."""
 
-    schema_version: Literal["1.0"] = "1.0"
+    schema_version: Literal["1.0", "1.1"] = "1.1"
     scenes: list[SceneMetadata]
 
     def save(self, path: str | Path) -> None:

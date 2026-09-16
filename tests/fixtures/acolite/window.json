@@ -1,0 +1,30 @@
+{
+  "column_offset": 251,
+  "crs": "EPSG:32619",
+  "geographic_limit": {
+    "east": -67.05268096923828,
+    "north": 17.97048568725586,
+    "south": 17.94721031188965,
+    "west": -67.0770034790039
+  },
+  "geometric_counts": {
+    "coastal_buffer_150m_pixels": 8352,
+    "land_pixels": 3434,
+    "water_outside_buffer_pixels": 53750
+  },
+  "height": 256,
+  "pixel_size": [
+    10.0,
+    -10.0
+  ],
+  "projected_bounds": {
+    "east": 706220.0,
+    "north": 1987980.0,
+    "south": 1985420.0,
+    "west": 703660.0
+  },
+  "row_offset": 341,
+  "schema_version": 1,
+  "source_run": "F",
+  "width": 256
+}

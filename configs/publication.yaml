@@ -1,0 +1,28 @@
+schema_version: "1.0"
+version: "1"
+continuous:
+  predictor: 3
+  overview_resampling: "AVERAGE"
+  data_type: "float32"
+bitfield:
+  predictor: 2
+  overview_resampling: "MODE"
+  data_type: "int32"
+display:
+  predictor: 2
+  overview_resampling: "AVERAGE"
+  data_type: "uint8"
+published_products:
+  - "tur_nechad2016"
+  - "spm_nechad2016"
+  - "chl_re_gons740"
+  - "fai"
+  - "fait"
+  - "ndvi"
+  - "l2_flags"
+  - "true_colour"
+true_colour:
+  bands: ["B04", "B03", "B02"]
+  # Surface reflectance 0-0.25 maps to 1-255 with gamma 2 (water 0.01-0.05 stays visible; sand, land and cloud saturate).
+  stretch: [0.0, 0.25]
+  gamma: 2.0

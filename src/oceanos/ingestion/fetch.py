@@ -1,100 +1,95 @@
-"""Controlled streaming downloads for one already-cataloged Sentinel-2 scene."""
+"""Verified whole-SAFE acquisition from CDSE without extraction."""
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from contextlib import nullcontext
-from datetime import datetime, timezone
 import hashlib
+import json
 import math
 import os
-from pathlib import Path
 import re
 import tempfile
+import zipfile
+from collections.abc import Callable
+from contextlib import nullcontext
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Literal
-from urllib.parse import urlsplit
 
 import httpx
-from pydantic import AwareDatetime, Field
+from pydantic import Field
 
-from oceanos.catalog import LocalSceneCatalog, SceneAsset, SceneMetadata
-from oceanos.catalog.models import MetadataModel
+from oceanos.catalog.local import LocalSceneCatalog
+from oceanos.catalog.models import MetadataModel, SceneMetadata
+from oceanos.domain import AcquiredScene, ArtifactRef, FailureCode
+from oceanos.storage import StorageLayout
 
-MVP_BANDS = ("B02", "B03", "B04", "B08", "B11")
-BAND_ASSETS = {"B02": "blue", "B03": "green", "B04": "red", "B08": "nir", "B11": "swir16"}
 CHUNK_SIZE = 1024 * 1024
+SAFE_BANDS = frozenset({"B01", "B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B09", "B10", "B11", "B12"})
 
 
-class MaterializationError(RuntimeError):
-    """A requested asset is absent, unsupported, or could not be verified."""
+class AcquisitionError(RuntimeError):
+    """A source product could not become a verified acquired scene."""
 
-
-class MaterializedAsset(MetadataModel):
-    asset_key: str
-    source_url: str
-    download_timestamp: AwareDatetime
-    local_path: str  # Relative to the scene directory containing manifest.json.
-    file_size: int = Field(gt=0)
-    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-
-
-class FailedAsset(MetadataModel):
-    asset_key: str
-    source_url: str
-    timestamp: AwareDatetime
-    error: str
+    def __init__(self, code: FailureCode, message: str) -> None:
+        self.code = code
+        super().__init__(f"{code.value}: {message}")
 
 
 class SceneManifest(MetadataModel):
+    """Portable manifest for one atomically published SAFE ZIP."""
+
     schema_version: Literal["1.0"] = "1.0"
-    scene_id: str
-    status: Literal["pending", "partial", "complete", "failed"] = "pending"
-    assets: dict[str, MaterializedAsset] = Field(default_factory=dict)
-    failures: dict[str, FailedAsset] = Field(default_factory=dict)
+    scene_id: str = Field(min_length=1)
+    source_id: str = Field(min_length=1)
+    status: Literal["complete"] = "complete"
+    acquired: AcquiredScene
+    provider_blake3: str | None = None
 
 
-def _resolve_asset(scene: SceneMetadata, band: str) -> tuple[str, SceneAsset]:
-    # B08 is the broad NIR band (nir), not B8A (nir08).
-    for candidate in (band.casefold(), BAND_ASSETS[band]):
-        matches = [(key, asset) for key, asset in scene.assets.items() if key.casefold() == candidate]
-        if len(matches) > 1:
-            raise MaterializationError(f"Ambiguous asset for band {band}")
-        if matches:
-            return matches[0]
-    raise MaterializationError(f"Scene {scene.scene_id} has no asset for band {band}")
-
-
-def _filename(band: str, asset: SceneAsset) -> str:
-    suffix = Path(urlsplit(asset.href).path).suffix.lower()
-    # Preserve known source formats without pretending to convert a raster.
-    return band + (suffix if suffix in {".tif", ".tiff", ".jp2"} else ".bin")
-
-
-def _sha256(path: Path) -> str:
-    with path.open("rb") as stream:
-        return hashlib.file_digest(stream, "sha256").hexdigest()
-
-
-def _verified(record: MaterializedAsset, key: str, asset: SceneAsset, destination: Path) -> bool:
-    if record.asset_key != key or record.source_url != asset.href or record.local_path != destination.name:
-        return False
-    if destination.is_symlink() or not destination.is_file():
-        return False
-    size = destination.stat().st_size
-    if size != record.file_size or (asset.file_size is not None and size != asset.file_size):
-        return False
-    return _sha256(destination) == record.sha256
-
-
-def _save_manifest(manifest: SceneManifest, path: Path) -> None:
-    text = manifest.model_dump_json(indent=2) + "\n"
-    if path.is_file() and path.read_text(encoding="utf-8") == text:
-        return
-    temporary = None
+def _validate_safe(path: Path) -> None:
     try:
-        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent, delete=False) as stream:
+        with zipfile.ZipFile(path) as archive:
+            names = [name.rstrip("/") for name in archive.namelist() if not name.endswith("/")]
+    except (OSError, zipfile.BadZipFile) as exc:
+        raise AcquisitionError(FailureCode.SAFE_MEMBERS_MISSING, "product is not a readable ZIP") from exc
+    roots = {name.split("/", 1)[0] for name in names if "/" in name}
+    root_metadata = [name for name in names if name.count("/") == 1 and name.endswith("/MTD_MSIL1C.xml")]
+    granules = {
+        parts[2]
+        for name in names
+        if len(parts := name.split("/")) >= 4 and parts[1] == "GRANULE"
+    }
+    valid = len(roots) == 1 and len(root_metadata) == 1 and len(granules) == 1
+    if valid:
+        root = next(iter(roots))
+        granule = next(iter(granules))
+        prefix = f"{root}/GRANULE/{granule}/"
+        tile_metadata = f"{prefix}MTD_TL.xml" in names
+        image_bands = set()
+        for name in names:
+            if name.startswith(f"{prefix}IMG_DATA/") and name.lower().endswith(".jp2"):
+                match = re.search(r"_B(0[1-9]|1[0-2]|8A)\.jp2$", name, re.IGNORECASE)
+                if match is not None:
+                        image_bands.add(f"B{match.group(1).upper()}")
+        detector_masks = [name for name in names if name.startswith(f"{prefix}QI_DATA/MSK_DETFOO")]
+        valid = tile_metadata and image_bands == SAFE_BANDS and bool(detector_masks)
+    if not valid:
+        raise AcquisitionError(
+            FailureCode.SAFE_MEMBERS_MISSING,
+            "SAFE must contain one granule, root/tile metadata, all 13 JP2 bands, and detector masks",
+        )
+
+
+def _atomic_json(model: MetadataModel, path: Path) -> None:
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=path.parent,
+            prefix=f".{path.name}-", delete=False,
+        ) as stream:
             temporary = Path(stream.name)
-            stream.write(text)
+            json.dump(model.model_dump(mode="json"), stream, indent=2, allow_nan=False)
+            stream.write("\n")
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temporary, path)
@@ -103,171 +98,155 @@ def _save_manifest(manifest: SceneManifest, path: Path) -> None:
             temporary.unlink()
 
 
-def load_materialized_bands(
-    scene: SceneMetadata, raw_dir: str | Path, bands: Sequence[str] = MVP_BANDS,
-) -> dict[str, Path]:
-    """Read-only verification for downstream processing; never fetch missing data."""
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,199}", scene.scene_id):
-        raise MaterializationError("scene_id must be a safe filename component")
-    directory = Path(raw_dir).expanduser().resolve() / "sentinel2" / scene.scene_id
-    if directory.resolve() != directory:
-        raise MaterializationError("Scene directory must not contain symbolic links")
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(CHUNK_SIZE), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _existing_manifest(path: Path, archive: Path, expected_sha256: str | None) -> SceneManifest | None:
+    if not path.exists() or not archive.exists():
+        return None
     try:
-        manifest = SceneManifest.model_validate_json((directory / "manifest.json").read_text(encoding="utf-8"))
-        if manifest.scene_id != scene.scene_id:
-            raise ValueError("Manifest belongs to a different scene")
-        paths = {}
-        for band in bands:
-            if band not in MVP_BANDS or band not in manifest.assets:
-                raise ValueError(f"Band {band} is not materialized")
-            key, asset = _resolve_asset(scene, band)
-            path = directory / _filename(band, asset)
-            if not _verified(manifest.assets[band], key, asset, path):
-                raise ValueError(f"Band {band} failed local integrity verification")
-            paths[band] = path
-        return paths
-    except (OSError, ValueError) as exc:
-        raise MaterializationError(f"Cannot use materialized scene {scene.scene_id}: {exc}") from exc
+        manifest = SceneManifest.model_validate_json(path.read_text(encoding="utf-8"))
+        digest = _file_sha256(archive)
+    except (OSError, ValueError):
+        return None
+    wanted = expected_sha256 or manifest.acquired.archive.sha256
+    if digest != manifest.acquired.archive.sha256 or digest != wanted or archive.stat().st_size != manifest.acquired.archive.size:
+        return None
+    _validate_safe(archive)
+    return manifest
 
 
-def _sync(manifest: SceneManifest, path: Path, catalog: LocalSceneCatalog) -> None:
-    manifest.status = (
-        "complete" if set(MVP_BANDS) <= manifest.assets.keys()
-        else "partial" if manifest.assets else "failed" if manifest.failures else "pending"
-    )
-    _save_manifest(manifest, path)
-    assets = {}
-    for record in manifest.assets.values():
-        data = record.model_dump(mode="json")
-        data["local_path"] = str(path.parent / record.local_path)
-        assets[record.asset_key] = data
-    catalog.record_materialization(
-        manifest.scene_id, status=manifest.status, manifest_path=str(path), assets=assets,
+def _sync_catalog(
+    catalog: LocalSceneCatalog | None,
+    scene: SceneMetadata,
+    manifest: SceneManifest,
+    raw_root: Path,
+    manifest_path: Path,
+) -> None:
+    if catalog is None:
+        return
+    assert scene.checksums is not None and scene.checksums.md5 is not None
+    catalog.record_acquisition(
+        scene.scene_id,
+        manifest_relpath=manifest_path.relative_to(raw_root).as_posix(),
+        archive_relpath=manifest.acquired.archive.relpath,
+        file_size=manifest.acquired.archive.size,
+        sha256=manifest.acquired.archive.sha256,
+        provider_md5=scene.checksums.md5.lower(),
     )
 
 
-def _download(
-    client: httpx.Client, asset: SceneAsset, key: str, destination: Path, timeout: float,
-) -> MaterializedAsset:
-    """Publish only a completed, nonempty, size-checked HTTP 200 response."""
-    temporary = None
-    try:
-        with client.stream(
-            "GET", asset.href, timeout=timeout, follow_redirects=True,
-            headers={"Accept-Encoding": "identity"},
-        ) as response:
-            if response.status_code != 200 or "Content-Range" in response.headers:
-                raise MaterializationError(f"Asset {key}: expected a full HTTP 200 response, got {response.status_code}")
-            if response.headers.get("Content-Encoding", "identity").lower() != "identity":
-                raise MaterializationError(f"Asset {key}: unexpected Content-Encoding")
-            content_length = response.headers.get("Content-Length")
-            remote_size = None
-            if content_length is not None:
-                if not re.fullmatch(r"[0-9]+", content_length):
-                    raise MaterializationError(f"Asset {key}: invalid Content-Length")
-                remote_size = int(content_length)
-                if asset.file_size is not None and remote_size != asset.file_size:
-                    raise MaterializationError(f"Asset {key}: Content-Length differs from catalog file size")
-            digest, size = hashlib.sha256(), 0
-            with tempfile.NamedTemporaryFile(dir=destination.parent, prefix=destination.name + ".", suffix=".part", delete=False) as stream:
-                temporary = Path(stream.name)
-                for chunk in response.iter_bytes(chunk_size=CHUNK_SIZE):
-                    stream.write(chunk)
-                    digest.update(chunk)
-                    size += len(chunk)
-                    if any(expected is not None and size > expected for expected in (asset.file_size, remote_size)):
-                        raise MaterializationError(f"Asset {key}: transfer exceeds expected file size")
-                stream.flush()
-                os.fsync(stream.fileno())
-            if size == 0 or any(expected is not None and size != expected for expected in (asset.file_size, remote_size)):
-                raise MaterializationError(f"Asset {key}: incomplete transfer or file size mismatch ({size} bytes)")
-        os.replace(temporary, destination)
-        return MaterializedAsset(
-            asset_key=key, source_url=asset.href, local_path=destination.name,
-            download_timestamp=datetime.now(timezone.utc), file_size=size, sha256=digest.hexdigest(),
-        )
-    except httpx.HTTPError as exc:
-        raise MaterializationError(f"Asset {key}: transfer failed ({type(exc).__name__})") from exc
-    finally:
-        if temporary is not None and temporary.exists():
-            temporary.unlink()
-
-
-def fetch_scene(
-    catalog: LocalSceneCatalog,
-    scene_id: str,
-    raw_dir: str | Path = "data/raw",
+def acquire_scene(
+    scene: SceneMetadata,
+    raw_root: str | Path,
     *,
-    bands: Sequence[str] = MVP_BANDS,
+    token_provider: Callable[[], str],
+    expected_sha256: str | None = None,
+    catalog: LocalSceneCatalog | None = None,
     timeout: float = 60,
+    max_retries: int = 1,
     client: httpx.Client | None = None,
 ) -> SceneManifest:
-    """Materialize requested MVP bands for ONE existing scene (one writer).
-
-    Verified files are reused without network requests. Interrupted transfers
-    restart from scratch on the next call; partial files are never reused.
-    A caller-supplied HTTPX client remains owned by the caller.
-    """
+    """Download, verify, and atomically publish one complete L1C SAFE ZIP."""
+    if scene.processing_level != "Level-1C":
+        raise AcquisitionError(FailureCode.NOT_L1C, "acquisition accepts only Level-1C scenes")
+    if scene.online is False:
+        raise AcquisitionError(FailureCode.PRODUCT_OFFLINE, "CDSE reports the product offline")
+    if scene.source_id is None or scene.checksums is None or scene.checksums.md5 is None:
+        raise AcquisitionError(FailureCode.MD5_MISMATCH, "CDSE MD5 is required for acquisition")
     if not math.isfinite(timeout) or timeout <= 0:
         raise ValueError("timeout must be finite and positive")
-    requested = tuple(dict.fromkeys(bands))
-    if not requested or any(band not in MVP_BANDS for band in requested):
-        raise ValueError(f"bands must be a nonempty subset of {MVP_BANDS}")
-    # Keep ordinary Sentinel-2 IDs in the requested directory layout. Reject
-    # path components that could escape raw_dir instead of rewriting scene IDs.
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,199}", scene_id):
-        raise ValueError("scene_id must be a safe filename component")
-    scene = catalog.get_scene(scene_id)
-    if scene is None:
-        raise MaterializationError(f"Scene does not exist in local catalog: {scene_id}")
-    selected = {band: _resolve_asset(scene, band) for band in requested}
-    for key, asset in selected.values():
-        parsed = urlsplit(asset.href)
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            raise MaterializationError(f"Asset {key}: materialization requires an HTTP(S) URL")
-    directory = Path(raw_dir).expanduser().resolve() / "sentinel2" / scene_id
-    if directory.is_symlink() or directory.resolve() != directory:
-        raise MaterializationError("Scene directory must not contain symbolic links")
+    if not isinstance(max_retries, int) or not 0 <= max_retries <= 5:
+        raise ValueError("max_retries must be an integer between 0 and 5")
+    if set(scene.assets) != {"product"}:
+        raise AcquisitionError(FailureCode.SAFE_MEMBERS_MISSING, "scene must expose exactly one product asset")
+    asset = scene.assets["product"]
+    if asset.file_size is None or asset.file_size <= 0:
+        raise AcquisitionError(FailureCode.SAFE_MEMBERS_MISSING, "catalogue ContentLength is required")
+    raw_path = Path(raw_root).expanduser().resolve()
+    layout = StorageLayout.from_data_root(raw_path.parent)
+    layout.raw = raw_path
+    directory = layout.raw_scene_dir(scene.scene_id)
     directory.mkdir(parents=True, exist_ok=True)
-    path = directory / "manifest.json"
-    if path.is_symlink():
-        raise MaterializationError("Manifest must not be a symbolic link")
-    try:
-        manifest = SceneManifest.model_validate_json(path.read_text()) if path.exists() else SceneManifest(scene_id=scene_id)
-    except (ValueError, OSError) as exc:
-        raise MaterializationError(f"Cannot read manifest: {path}") from exc
-    if manifest.scene_id != scene_id:
-        raise MaterializationError("Manifest belongs to a different scene")
-    if any(band not in MVP_BANDS for band in manifest.assets):
-        raise MaterializationError("Manifest contains an unsupported band")
-    # Verify all recorded copies, including previously requested bands. Stale
-    # records must not keep the catalog marked complete after local corruption.
-    for band, record in list(manifest.assets.items()):
-        try:
-            key, asset = _resolve_asset(scene, band)
-            valid = _verified(record, key, asset, directory / _filename(band, asset))
-        except (MaterializationError, OSError):
-            valid = False
-        if not valid:
-            del manifest.assets[band]
-            manifest.failures[band] = FailedAsset(
-                asset_key=record.asset_key, source_url=record.source_url,
-                timestamp=datetime.now(timezone.utc), error="Local integrity verification failed",
-            )
-    _sync(manifest, path, catalog)
+    archive = directory / f"{scene.scene_id}.zip"
+    manifest_path = directory / "manifest.json"
+    existing = _existing_manifest(manifest_path, archive, expected_sha256)
+    if existing is not None:
+        _sync_catalog(catalog, scene, existing, layout.raw, manifest_path)
+        return existing
+    temporary = archive.with_suffix(".zip.part")
     context = nullcontext(client) if client is not None else httpx.Client()
-    with context as transport:
-        for band, (key, asset) in selected.items():
-            if band in manifest.assets:
-                continue
-            try:
-                manifest.assets[band] = _download(transport, asset, key, directory / _filename(band, asset), timeout)
-            except (MaterializationError, OSError) as exc:
-                manifest.failures[band] = FailedAsset(
-                    asset_key=key, source_url=asset.href, timestamp=datetime.now(timezone.utc), error=str(exc),
-                )
-                _sync(manifest, path, catalog)
-                raise MaterializationError(f"Could not materialize {scene_id} band {band}: {exc}") from exc
-            manifest.failures.pop(band, None)
-            _sync(manifest, path, catalog)
-    return manifest
+    last_error: AcquisitionError | None = None
+    try:
+        with context as transport:
+            for attempt in range(max_retries + 1):
+                md5 = hashlib.md5(usedforsecurity=False)
+                sha256 = hashlib.sha256()
+                size = 0
+                try:
+                    token = token_provider()
+                    with transport.stream(
+                        "GET", asset.href,
+                        headers={"Authorization": f"Bearer {token}", "Accept-Encoding": "identity"},
+                        timeout=timeout,
+                    ) as response:
+                        if response.status_code != 200 or "Content-Range" in response.headers:
+                            raise AcquisitionError(FailureCode.INTERNAL_UNEXPECTED, f"full transfer requires HTTP 200, got {response.status_code}")
+                        header = response.headers.get("Content-Length")
+                        if header is None or int(header) != asset.file_size:
+                            raise AcquisitionError(FailureCode.INTERNAL_UNEXPECTED, "Content-Length differs from catalogue ContentLength")
+                        with temporary.open("wb") as stream:
+                            for chunk in response.iter_bytes(chunk_size=CHUNK_SIZE):
+                                stream.write(chunk)
+                                md5.update(chunk)
+                                sha256.update(chunk)
+                                size += len(chunk)
+                            stream.flush()
+                            os.fsync(stream.fileno())
+                    if size != asset.file_size:
+                        raise AcquisitionError(FailureCode.INTERNAL_UNEXPECTED, "downloaded size differs from ContentLength")
+                    if md5.hexdigest().lower() != scene.checksums.md5.lower():
+                        raise AcquisitionError(FailureCode.MD5_MISMATCH, "stream MD5 differs from provider checksum")
+                    digest = sha256.hexdigest()
+                    if expected_sha256 is not None and digest != expected_sha256:
+                        raise AcquisitionError(FailureCode.REFETCH_MISMATCH, "re-fetched SAFE differs from recorded SHA-256")
+                    _validate_safe(temporary)
+                    os.replace(temporary, archive)
+                    relative = archive.relative_to(layout.raw).as_posix()
+                    acquired = AcquiredScene(
+                        scene_id=scene.scene_id, source_id=scene.source_id,
+                        archive=ArtifactRef(
+                            role="source", relpath=relative, sha256=digest, size=size,
+                            media_type="application/zip",
+                        ),
+                        provider_md5_verified=True, safe_members_verified=True,
+                        verified_at=datetime.now(UTC),
+                    )
+                    manifest = SceneManifest(
+                        scene_id=scene.scene_id, source_id=scene.source_id,
+                        acquired=acquired, provider_blake3=scene.checksums.blake3,
+                    )
+                    _atomic_json(manifest, manifest_path)
+                    _sync_catalog(catalog, scene, manifest, layout.raw, manifest_path)
+                    return manifest
+                except AcquisitionError as exc:
+                    last_error = exc
+                    if exc.code is not FailureCode.MD5_MISMATCH or attempt == max_retries:
+                        raise
+                except (httpx.HTTPError, OSError, ValueError) as exc:
+                    last_error = AcquisitionError(FailureCode.INTERNAL_UNEXPECTED, f"SAFE transfer failed: {type(exc).__name__}")
+                    if attempt == max_retries:
+                        raise last_error from exc
+                finally:
+                    if temporary.exists():
+                        temporary.unlink()
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+    assert last_error is not None
+    raise last_error
