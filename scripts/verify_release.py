@@ -45,6 +45,11 @@ def stac_item_errors(item: dict[str, Any]) -> list[str]:
 
 
 def _sha256(path: Path) -> str:
+    """Return the SHA-256 of a file, read in bounded blocks.
+
+    Deliberately independent of ``oceanos.storage``: this verifier must not
+    trust the library that wrote the release it is checking.
+    """
     digest = sha256()
     with path.open("rb") as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):

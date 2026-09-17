@@ -19,7 +19,35 @@ from typing import IO, Literal
 
 from pydantic import AwareDatetime, Field
 
-from oceanos.domain import MetadataModel, validate_scene_id
+from oceanos.domain import ArtifactRef, MetadataModel, validate_scene_id
+
+HASH_CHUNK_BYTES = 1024 * 1024
+GEOTIFF_MEDIA_TYPE = "image/tiff; application=geotiff"
+COG_MEDIA_TYPE = "image/tiff; application=geotiff; profile=cloud-optimized"
+RAW_SCENE_PREFIX = "sentinel2-l1c"
+
+
+def file_sha256(path: str | Path) -> str:
+    """Return the SHA-256 of a file, read in bounded blocks."""
+    digest = sha256()
+    with Path(path).open("rb") as stream:
+        for chunk in iter(lambda: stream.read(HASH_CHUNK_BYTES), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def artifact_ref(path: Path, tier_root: Path, role: str, media_type: str) -> ArtifactRef:
+    """Describe one on-disk file by its role and its path relative to its tier root."""
+    return ArtifactRef(
+        role=role, relpath=path.relative_to(tier_root).as_posix(), sha256=file_sha256(path),
+        size=path.stat().st_size, media_type=media_type,
+    )
+
+
+def raw_scene_dir(raw_root: Path, scene_id: str) -> Path:
+    """Directory of one acquired scene under ``raw_root``, keyed by a validated id."""
+    value = validate_scene_id(scene_id)
+    return raw_root / RAW_SCENE_PREFIX / sha256(value.encode("utf-8")).hexdigest()
 
 
 class StorageLayout:
@@ -45,9 +73,7 @@ class StorageLayout:
         )
 
     def raw_scene_dir(self, scene_id: str) -> Path:
-        value = validate_scene_id(scene_id)
-        key = sha256(value.encode("utf-8")).hexdigest()
-        return self.raw / "sentinel2-l1c" / key
+        return raw_scene_dir(self.raw, scene_id)
 
     @staticmethod
     def _id(value: str, pattern: str, label: str) -> str:
@@ -150,7 +176,8 @@ class WriterLockedError(RuntimeError):
     """Another process owns the single-writer lock."""
 
 
-def _proc_start_time(pid: int) -> int | None:
+def process_start_time(pid: int) -> int | None:
+    """Kernel start time of a live pid, or None; part of a holder's identity."""
     try:
         text = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8")
         return int(text[text.rfind(")") + 2 :].split()[19])
@@ -158,7 +185,8 @@ def _proc_start_time(pid: int) -> int | None:
         return None
 
 
-def _boot_id() -> str | None:
+def boot_id() -> str | None:
+    """This boot's identifier, or None; a pid only means something within one boot."""
     try:
         return Path("/proc/sys/kernel/random/boot_id").read_text(encoding="utf-8").strip()
     except OSError:
@@ -193,7 +221,7 @@ class WriterLock:
             stream.close()
             raise WriterLockedError("internal.writer_locked: another mutating command is active") from exc
         holder = LockHolder(
-            pid=os.getpid(), proc_start_time=_proc_start_time(os.getpid()), boot_id=_boot_id(),
+            pid=os.getpid(), proc_start_time=process_start_time(os.getpid()), boot_id=boot_id(),
             host=socket.gethostname(), attempt_id=attempt_id, started_at=datetime.now(UTC),
         )
         self._stream = stream
@@ -213,7 +241,7 @@ class WriterLock:
         if self._holder is None:
             raise RuntimeError("WriterLock is not held")
         self._holder = self._holder.model_copy(update={
-            "child_pid": pid, "child_pgid": pgid, "child_start_time": _proc_start_time(pid),
+            "child_pid": pid, "child_pgid": pgid, "child_start_time": process_start_time(pid),
             "child_cmdline": cmdline,
         })
         self._write_holder(self._holder)

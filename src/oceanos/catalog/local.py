@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import tempfile
-from copy import deepcopy
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path, PurePosixPath
@@ -37,6 +36,8 @@ class _LocalIO(pystac.StacIO):
 
     def _path(self, href: Any) -> Path:
         value = href.get_absolute_href() if isinstance(href, pystac.Link) else str(href)
+        if value is None:
+            raise LocalCatalogError("Local catalog links must resolve to a path")
         if urlsplit(value).scheme:
             raise LocalCatalogError(f"Local catalog links must refer to local files: {value}")
         return Path(value)
@@ -61,14 +62,14 @@ class _LocalIO(pystac.StacIO):
 class _Layout(HrefLayoutStrategy):
     """Stable filenames independent of insertion order, safe for arbitrary IDs."""
 
-    def get_catalog_href(self, cat, parent_dir, is_root):
+    def get_catalog_href(self, cat: pystac.Catalog, parent_dir: str, is_root: bool) -> str:
         return str(Path(parent_dir) / "catalog.json")
 
-    def get_collection_href(self, col, parent_dir, is_root):
+    def get_collection_href(self, col: pystac.Collection, parent_dir: str, is_root: bool) -> str:
         key = sha256(col.id.encode("utf-8")).hexdigest()
         return str(Path(parent_dir) / "collections" / key / "collection.json")
 
-    def get_item_href(self, item, parent_dir):
+    def get_item_href(self, item: pystac.Item, parent_dir: str) -> str:
         key = sha256(item.id.encode("utf-8")).hexdigest()
         return str(Path(parent_dir) / "items" / f"{key}.json")
 
@@ -132,13 +133,16 @@ def scene_from_stac_item(item: pystac.Item) -> SceneMetadata:
     try:
         if item.properties["oceanos:original_scene_id"] != item.id:
             raise ValueError("original_scene_id differs from the STAC Item ID")
+        if item.collection_id is None or item.datetime is None or item.geometry is None or item.bbox is None:
+            raise ValueError("STAC Item lacks a collection, datetime, geometry or bbox")
         return SceneMetadata(
             scene_id=item.id,
             collection=item.collection_id,
             platform=item.properties.get("platform"),
             datetime=item.datetime,
-            geometry=item.geometry,
-            bbox=item.bbox,
+            # Validated into the discriminated union by pydantic at construction.
+            geometry=item.geometry,  # type: ignore[arg-type]
+            bbox=(item.bbox[0], item.bbox[1], item.bbox[2], item.bbox[3]),
             cloud_cover=item.properties.get("eo:cloud_cover"),
             source_catalog=item.properties["oceanos:source_catalog"],
             processing_level=item.properties.get("oceanos:processing_level"),
@@ -170,8 +174,9 @@ def _collection(collection_id: str) -> pystac.Collection:
         title=f"OCEANOS Sentinel-2 — {collection_id}",
         description="Local index of discovered Sentinel-2 scene metadata and remote asset references.",
         extent=pystac.Extent(
-            pystac.SpatialExtent([[-180, -90, 180, 90]]),
-            pystac.TemporalExtent([[None, None]]),
+            pystac.SpatialExtent([[-180.0, -90.0, 180.0, 90.0]]),
+            # An unbounded interval is how STAC spells "extent not yet known".
+            pystac.TemporalExtent([[None, None]]),  # type: ignore[arg-type]
         ),
         license="other",
         extra_fields={"oceanos:extent_status": "empty"},
@@ -244,40 +249,6 @@ class LocalSceneCatalog:
 
     def scene_exists(self, scene_id: str) -> bool:
         return self.get_stac_item(scene_id) is not None
-
-    def record_materialization(
-        self, scene_id: str, *, status: str, manifest_path: str, assets: dict[str, dict],
-    ) -> None:
-        """Record verified local copies without replacing original asset HREFs.
-
-        ``assets`` is keyed by original asset key. Missing entries have any stale
-        local annotations removed. Scientific metadata is never updated here.
-        """
-        if status not in {"pending", "partial", "complete", "failed"}:
-            raise ValueError(f"Invalid materialization status: {status}")
-        catalog = self._load()
-        item = next(catalog.get_items(scene_id, recursive=True), None)
-        if item is None:
-            raise LocalCatalogError(f"Scene does not exist: {scene_id}")
-        before = deepcopy(item.to_dict())
-        for key, record in assets.items():
-            if key not in item.assets or item.assets[key].href != record["source_url"]:
-                raise LocalCatalogError(f"Materialized asset does not match original URL: {key}")
-        item.properties["oceanos:materialization_status"] = status
-        item.properties["oceanos:manifest_path"] = manifest_path
-        item.properties["oceanos:processing_status"] = {
-            "complete": "materialized", "partial": "partially_materialized",
-            "failed": "materialization_failed", "pending": "discovered",
-        }[status]
-        local_fields = ("local_path", "file_size", "sha256", "download_timestamp")
-        for key, asset in item.assets.items():
-            for field in local_fields:
-                asset.extra_fields.pop(f"oceanos:{field}", None)
-            if key in assets:
-                for field in local_fields:
-                    asset.extra_fields[f"oceanos:{field}"] = assets[key][field]
-        if item.to_dict() != before:
-            self._save(catalog)
 
     def record_acquisition(
         self, scene_id: str, *, manifest_relpath: str, archive_relpath: str,

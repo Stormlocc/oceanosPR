@@ -5,7 +5,6 @@ from __future__ import annotations
 import fnmatch
 import warnings
 from datetime import UTC, datetime
-from hashlib import sha256
 from pathlib import Path
 from typing import Literal
 
@@ -17,7 +16,6 @@ from oceanos.domain import (
     AcoliteRunOutputs,
     AerosolEvidence,
     AncillaryEvidence,
-    ArtifactRef,
     FailureCode,
     FailureRecord,
     FailureScope,
@@ -25,6 +23,7 @@ from oceanos.domain import (
     FlagSpec,
     SunViewGeometry,
 )
+from oceanos.storage import artifact_ref
 
 _SKIP_FRAGMENTS = (
     "File not recognised",
@@ -34,9 +33,8 @@ _SKIP_FRAGMENTS = (
 )
 
 
-def _is_skip_line(line: str) -> bool:
-    unsupported_processing = "Processing of" in line and "not supported" in line
-    return unsupported_processing or any(fragment in line for fragment in _SKIP_FRAGMENTS)
+# One row per l2_flags bit: (name, resolved-settings exponent key, meaning,
+# the setting that enables it, whether it counts towards the usable mask).
 _FLAG_ROWS = (
     ("swir_threshold", "flag_exponent_swir", "SWIR threshold exceeded", "l2w_mask", True),
     ("cirrus", "flag_exponent_cirrus", "cirrus threshold exceeded", "l2w_mask_cirrus", True),
@@ -48,15 +46,9 @@ _FLAG_ROWS = (
 )
 
 
-def _artifact(path: Path, workspace: Path, role: str, media_type: str) -> ArtifactRef:
-    digest = sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return ArtifactRef(
-        role=role, relpath=path.relative_to(workspace).as_posix(), sha256=digest.hexdigest(),
-        size=path.stat().st_size, media_type=media_type,
-    )
+def _is_skip_line(line: str) -> bool:
+    unsupported_processing = "Processing of" in line and "not supported" in line
+    return unsupported_processing or any(fragment in line for fragment in _SKIP_FRAGMENTS)
 
 
 def _settings(path: Path) -> dict[str, str]:
@@ -139,10 +131,15 @@ class RunVerifier:
         self, *, workspace: Path, attempt_id: str, platform: Platform,
         release_tag: str, parameters: tuple[str, ...], outcome: ProcessOutcome,
     ) -> AcoliteRunOutputs | FailureRecord:
+        exit_evidence = [f"exit_code={outcome.exit_code}"]
         if outcome.timed_out:
-            return self._failure(FailureCode.ACOLITE_TIMEOUT, "ACOLITE exceeded its wall-clock limit", [f"exit_code={outcome.exit_code}"], retryable=True)
+            return self._failure(
+                FailureCode.ACOLITE_TIMEOUT, "ACOLITE exceeded its wall-clock limit", exit_evidence, retryable=True,
+            )
         if outcome.exit_code != 0:
-            return self._failure(FailureCode.ACOLITE_NONZERO_EXIT, "ACOLITE exited nonzero", [f"exit_code={outcome.exit_code}"], retryable=True)
+            return self._failure(
+                FailureCode.ACOLITE_NONZERO_EXIT, "ACOLITE exited nonzero", exit_evidence, retryable=True,
+            )
 
         log = workspace / outcome.log_path
         try:
@@ -160,7 +157,10 @@ class RunVerifier:
         if any(len(files) != 1 for files in (l2r_files, l2w_files, user_files, resolved_files)) or not log.is_file():
             return self._failure(
                 FailureCode.ACOLITE_MISSING_OUTPUT, "expected exactly one output of each required kind",
-                [f"l2r={len(l2r_files)}", f"l2w={len(l2w_files)}", f"settings_user={len(user_files)}", f"settings_resolved={len(resolved_files)}"],
+                [
+                    f"l2r={len(l2r_files)}", f"l2w={len(l2w_files)}",
+                    f"settings_user={len(user_files)}", f"settings_resolved={len(resolved_files)}",
+                ],
                 retryable=True,
             )
         l2r, l2w, settings_user, settings_resolved = l2r_files[0], l2w_files[0], user_files[0], resolved_files[0]
@@ -255,11 +255,11 @@ class RunVerifier:
                 ["invalid or incomplete output metadata"],
             )
         return AcoliteRunOutputs(
-            l2r=_artifact(l2r, workspace, "l2r", "application/x-netcdf"),
-            l2w=_artifact(l2w, workspace, "l2w", "application/x-netcdf"),
-            log=_artifact(log, workspace, "run_log", "text/plain"),
-            settings_user=_artifact(settings_user, workspace, "settings_user", "text/plain"),
-            settings_resolved=_artifact(settings_resolved, workspace, "settings_resolved", "text/plain"),
+            l2r=artifact_ref(l2r, workspace, "l2r", "application/x-netcdf"),
+            l2w=artifact_ref(l2w, workspace, "l2w", "application/x-netcdf"),
+            log=artifact_ref(log, workspace, "run_log", "text/plain"),
+            settings_user=artifact_ref(settings_user, workspace, "settings_user", "text/plain"),
+            settings_resolved=artifact_ref(settings_resolved, workspace, "settings_resolved", "text/plain"),
             acolite_version_attr=version, aerosol=aerosol,
             variables_present=tuple(sorted(set(l2r_names) | set(l2w_names))),
             l2r_variables=tuple(sorted(l2r_names)),

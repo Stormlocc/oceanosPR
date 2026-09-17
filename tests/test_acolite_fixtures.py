@@ -1,4 +1,11 @@
-"""Offline checks for the real, trimmed ACOLITE Phase 1 fixtures."""
+"""Offline checks for the real, trimmed ACOLITE Phase 1 fixtures.
+
+``gshhg_clip.geojson`` and ``window.json``'s ``geometric_counts`` are the frozen
+Phase 1 record of how this window was selected, under the coastline source in
+force then. They are provenance, not live behaviour: the pipeline's land mask is
+CUDEM (DA-1 amendment) and ``tests/test_land_mask.py`` covers it. Do not treat
+the counts below as a statement about the current mask.
+"""
 
 from __future__ import annotations
 
@@ -16,7 +23,11 @@ from shapely.ops import unary_union
 
 FIXTURES = Path(__file__).parent / "fixtures" / "acolite"
 EXPECTED_SUCCESS_PRODUCTS = {
-    *(f"{family}_{wavelength}" for family in ("Rrs", "rhorc", "rhow") for wavelength in (443, 492, 560, 665, 704, 740, 783, 833, 865, 1614, 2202)),
+    *(
+        f"{family}_{wavelength}"
+        for family in ("Rrs", "rhorc", "rhow")
+        for wavelength in (443, 492, 560, 665, 704, 740, 783, 833, 865, 1614, 2202)
+    ),
     "SPM_Nechad2016_665",
     "TUR_Nechad2016_665",
     "chl_re_gons740",
@@ -134,7 +145,7 @@ def test_success_fixture_has_enough_valid_water_for_every_product() -> None:
     l2w = _one("success", "*_L2W.nc")
     candidate = _candidate_mask("success", water)
     products = _subdataset_names(l2w) - {"lon", "lat", "l2_flags"}
-    assert EXPECTED_SUCCESS_PRODUCTS <= products
+    assert products >= EXPECTED_SUCCESS_PRODUCTS
     fractions = {
         product: float(np.count_nonzero(candidate & np.isfinite(_read_array(l2w, product))) / water.sum())
         for product in EXPECTED_SUCCESS_PRODUCTS

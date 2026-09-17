@@ -191,7 +191,7 @@ today (v0.1.0) and the `geoai-py` library it wraps.
 | `process-raster` clip / mosaic / stack | **no, before ACOLITE**; unnecessary after | Research §5.4: upstream clip, resample and mosaic invalidate or degrade the correction; Q11 forbids external mosaicking |
 | `detect-objects` (buildings, cars, ships, solar panels, parking, fields, GroundedSAM) | no | No floating-algae model; GPU-oriented against a no-GPU constraint; model-based sargassum detection is explicitly out of scope (Brief) and a PRD non-goal |
 | `inspect-geo` | **yes, as operator/dev tooling** | Inspecting COGs and NetCDF during development and incident review |
-| `overture-data` | not needed | GSHHG is the locked coastline source (Q7) |
+| `overture-data` | not needed | the coastline comes from the pinned reference data, GSHHG at the time of writing and CUDEM since the DA-1 amendment |
 
 `geoai-py` is **not installed** in the project environment (verified). **Recommendation:** GeoAI stays
 development tooling only. It adds **no runtime dependency** to `pyproject.toml`, and nothing under
@@ -370,8 +370,10 @@ V8 remedy evidence (Runs F/G, 2026-09-14, pin `20260421.0`):
   **Resolved:** re-cloned at the tag and verified 2026-09-14.
 - **E2.** `~/acolite/data/LUT` was empty (SUMMARY §8). **Resolved:** LUT retrieval and environment
   check pass.
-- **E3.** GSHHG was not downloaded (SUMMARY §8). **Resolved:** the pinned OCEANOS-owned archive is
-  present and `scripts/fetch_reference_data.py gshhg --check` passes.
+- **E3.** GSHHG was not downloaded (SUMMARY §8). **Resolved then, moot now:** the pinned archive was
+  fetched in Phase 1, and the DA-1 amendment replaced GSHHG with CUDEM; the dataset was retired from
+  the repository on 2026-09-17. `scripts/fetch_reference_data.py bathymetry --check` is the check
+  that matters.
 - **E4.** The `version=20260421.0` line (Q15) was absent from deployment `config/config.txt`.
   **Resolved:** exactly one version line is present.
 
@@ -666,6 +668,7 @@ overlay: `.work/oceanos-pr-mvp/da6-review/`.
 
 **Decision.** `LandMask` v2 and the `AnalysisMask` v2 coastal buffer derive from the pinned CUDEM
 tiles: land = grid-averaged elevation > 0 m (PRVD02); the 150 m buffer is applied to that land.
-GSHHG is no longer read by the pipeline (the Phase 1 fetch script and probe check remain, pending
-Phase 7 clean-up). Water products are still NaN on land (T5 exception unchanged). The Phase 1 fixture
+GSHHG is no longer read by the pipeline; its fetch script, failure code and probe check were
+**retired on 2026-09-17** (Phase 7 item pulled forward at the user's request - see PLAN.md,
+"Resolved after lock (limpieza integral, 2026-09-17)"). Water products are still NaN on land (T5 exception unchanged). The Phase 1 fixture
 window now has 539 land pixels (GSHHG: 3434) and 58 481 water pixels outside the buffer (GSHHG: 53 750).

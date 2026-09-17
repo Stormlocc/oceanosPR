@@ -1,4 +1,4 @@
-"""Pure planning now; orchestration stages are added by later phases."""
+"""Planning, one-observation orchestration and downstream re-entry."""
 
 from oceanos.pipeline.plan import (
     SelectionError,

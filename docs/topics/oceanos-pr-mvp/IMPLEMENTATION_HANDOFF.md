@@ -3,6 +3,70 @@
 Durable execution record between implementation sessions. Git, PLAN phase tags and tests remain
 authoritative; this file records what they cannot.
 
+## PAUSED — clean-up applied (2026-09-17)
+
+**Implementation is still deliberately stopped after Phase 3.** On 2026-09-17 the user asked for a
+full clean-up of the repository before Phase 4. It is done and verified. **Phase 4 is still the next
+unit and still `[TODO]`.** No stage, contract, pinned value, acceptance criterion or phase boundary
+moved.
+
+- **Branch:** `feat/oceanos-pr-mvp`. The clean-up is one commit on it.
+- **Full record:** PLAN.md, "Resolved after lock (limpieza integral, 2026-09-17)" — eight numbered
+  sections, each with the evidence that what was removed was dead.
+- **Reader-facing summary:** `README.md`, "Limpieza integral (2026-09-17)".
+
+**The one contract change, authorised by the user:** GSHHG was retired
+(`FailureCode.GSHHG_MISSING`, `AcoliteInstallation.gshhg_present`, the `InstallationProbe` check
+and parameter, `fetch_reference_data.py gshhg`, and the dead `pyogrio` dependency that only existed
+to read its shapefile — `pandas` went with it). This was a Phase 7 item; the user was asked and
+chose to pull it forward. The Phase 1 fixture-selection artifacts (`gshhg_clip.geojson`,
+`window.json` counts, their tests, the generator's clip step) were **kept on purpose** as frozen
+provenance and now say so in their docstrings.
+
+**One thing that needs a decision before Phase 6 runs.** Phase 6 and decision D-5 specify a
+*GSHHG* coastline GeoJSON as the viewer's map context. GSHHG is no longer fetched. The recommended
+substitute is the **0 m contour of the pinned CUDEM tiles** — already the land mask's own boundary,
+so no new dependency and no change to D-5's intent (no external basemap). Recorded in PLAN.md at the
+Phase 6 item and on the D-5 row; **not decided.**
+
+**What else changed** (detail in PLAN.md):
+
+| Area | Change |
+| --- | --- |
+| Dead code | `record_materialization`, `EXCLUDING_FLAGS`, the three module-level `CogProfile`s, `docs/examples/scenes.json`, `tests/test_package.py`, the `data/**/.gitignore` placeholders |
+| Duplication | `file_sha256`/`artifact_ref` moved to `oceanos.storage` (was 7 copies); `L1C_COLLECTION`, `layout_for`, the MSI band order, the media types and `MetadataModel` unified |
+| Legibility | `__import__("re")` removed, function-local imports hoisted, `_validate_safe` split, `fetch.py`'s `StorageLayout` mutation removed, `domain.py` forward refs reordered, 3 `raise ... from exc` added |
+| Public API | `storage._boot_id`/`_proc_start_time` → `boot_id`/`process_start_time`, closing the private-import item below |
+| Tooling | ruff widened from the default `E4/E7/E9/F` to 14 rule families at `line-length = 140`; `[tool.pytest.ini_options]` added; `referencing` declared as a dev dependency |
+| `.gitignore` | Bug fixed: `catalog/` was also ignoring `src/oceanos/catalog/`. All root patterns anchored |
+| Types | `uv run mypy src`: 56 → 22 errors, **all 22 missing third-party stubs**; no real type errors left |
+| Docs | `architecture.md` rewritten; frozen-snapshot banners on `SUMMARY.md` and `CURRENT_STATE.md`; the amended Brief decisions (Q5, Q7, Q13) marked; README/CLAUDE.md/design sections synced |
+| Quarantine | `.quarantine-20260916/` cut from 2.5 GB to 36 KB; only `aoi-slices-descartadas/` kept, on the user's instruction |
+
+**Verification at this commit:**
+
+| Command | Result |
+| --- | --- |
+| `uv run pytest -q` | 183 passed (185 before; `test_package.py` and the `extract()` test went with their targets) |
+| `uv run ruff check src tests scripts` | clean, at the widened rule set |
+| `uv run mypy src/oceanos/acolite src/oceanos/domain.py src/oceanos/pipeline src/oceanos/storage.py src/oceanos/timeseries` | clean, 17 files |
+| `uv run mypy src` | 22 errors, all missing third-party stubs |
+| `uv run python -m oceanos aoi info --config configs/mvp.yaml` | exit 0 |
+| `uv run python scripts/acolite_env.py --check` | exit 0, pin `f73cbe73…` |
+| `uv run python scripts/fetch_reference_data.py all --check` | exit 0, 4 CUDEM tiles |
+| `git ls-files -i -c --exclude-standard` | empty |
+
+The real ACOLITE probe was **not** re-run: it downloads ~800 MB and runs ACOLITE, and nothing on the
+processing path changed. The last real verdicts remain those under "Phase 3 closure record".
+
+**Untracked by design, and still present:** `.agents/`, `data/`, `.work/`, `catalog/`,
+`.superpowers/`, `.quarantine-20260916/aoi-slices-descartadas/`, and the user's own in-progress AOI
+work (`configs/w2c_south*.yaml`, `configs/aoi/w2c_south*.geojson`, `configs/aoi_other_format/`).
+None of it was touched.
+
+**Exact next action:** start Phase 4 by reading its PLAN section; it runs only when the user hands it
+over.
+
 ## PAUSED (2026-09-16)
 
 **Implementation is deliberately stopped after Phase 3.** The user is pausing to study the codebase
@@ -188,10 +252,12 @@ over.
 
 ## Known, pre-existing
 
-- `uv run mypy src` reports errors in modules predating the MVP (`aoi`, `catalog/*`,
-  `config/loader`, `processing/*`, `__main__`); `publishing` and `processing` are not in the strict
-  mypy override list. Strict modules (`acolite`, `domain`, `pipeline`) type-check clean.
-- `archive.py` imports private `_boot_id`/`_proc_start_time` from `oceanos.storage`.
+- ~~`uv run mypy src` reports errors in modules predating the MVP~~ **resolved 2026-09-17:** the 22
+  remaining errors are all missing third-party stubs (`rasterio`, `shapely`, `yaml`); no real type
+  error is left. `publishing` and `processing` are still outside the strict override list, so they
+  are checked without `strict = true`.
+- ~~`archive.py` imports private `_boot_id`/`_proc_start_time` from `oceanos.storage`.~~ **resolved
+  2026-09-17:** both are public (`boot_id`, `process_start_time`).
 
 ## Last verification (Phase 2.3 commit tree)
 

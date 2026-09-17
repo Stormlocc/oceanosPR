@@ -57,8 +57,8 @@ def test_scene_a_matches_phase1_names_units_and_flag_spec(tmp_path: Path) -> Non
         pin=AcolitePin(release_tag=settings.acolite.release_tag, commit_sha=settings.acolite.commit_sha),
         root=settings.acolite.root, python_executable=settings.acolite.python_executable,
         launcher=settings.acolite.launcher, luts_dir=settings.acolite.luts_dir,
-        external_dir=settings.acolite.external_dir, netrc_path=Path.home() / ".netrc",
-        disk_path=tmp_path, required_disk_bytes=3 * SCENE_A.stat().st_size,
+        netrc_path=Path.home() / ".netrc", disk_path=tmp_path,
+        required_disk_bytes=3 * SCENE_A.stat().st_size,
     )
     if not isinstance(probe, AcoliteInstallation):
         pytest.fail(f"ACOLITE probe prerequisite failed: {probe.model_dump(mode='json')}")

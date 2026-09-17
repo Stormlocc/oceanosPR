@@ -15,7 +15,7 @@ _WAVELENGTHS: dict[Platform, tuple[int, ...]] = {
     "S2B": (442, 492, 559, 665, 704, 739, 780, 833, 864, 943, 1377, 1610, 2186),
     "S2C": (444, 489, 561, 667, 707, 741, 785, 835, 866, 947, 1372, 1612, 2191),
 }
-_BAND_INDEX = {band: index for index, band in enumerate(_BANDS)}
+_BAND_INDEX: dict[str, int] = {band: index for index, band in enumerate(_BANDS)}
 
 
 def platform_wavelengths(platform: Platform) -> tuple[int, ...]:
@@ -35,7 +35,15 @@ def science_wavelengths(platform: Platform) -> tuple[int, ...]:
 
 
 def acolite_variable(
-    platform: Platform, band: Band, family: Literal["rhow", "Rrs", "rhorc"],
+    platform: Platform, band: str, family: Literal["rhos", "rhow", "Rrs", "rhorc"],
 ) -> str:
-    """Build the exact platform-specific ACOLITE variable name."""
-    return f"{family}_{platform_wavelengths(platform)[_BAND_INDEX[band]]}"
+    """Build the exact platform-specific ACOLITE variable name.
+
+    ``band`` is an MSI band name; an unknown one is a ``ValueError``, so callers
+    never silently resolve to the wrong wavelength.
+    """
+    try:
+        index = _BAND_INDEX[band]
+    except KeyError as exc:
+        raise ValueError(f"unknown Sentinel-2 band: {band}") from exc
+    return f"{family}_{platform_wavelengths(platform)[index]}"

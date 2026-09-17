@@ -314,7 +314,7 @@ source_sha256}`; timestamps `{acquired, processed, archived, published}`; `scien
 | `input.checksum_mismatch` | P1 | SAFE sha256 re-verification | observation | after re-fetch |
 | `env.acolite_commit_mismatch` | P1 | observed commit ≠ pin | **batch** | after environment fix |
 | `env.acolite_version_line_missing` | P1 | `config/config.txt` lacks `version=` (Q15) | **batch** | after fix |
-| `env.luts_missing` / `env.gshhg_missing` (OCEANOS `data/external/gshhg`) / `env.credentials_missing` | P1 | probe | **batch** | after fix |
+| `env.luts_missing` / `env.credentials_missing` | P1 | probe | **batch** | after fix |
 | `env.disk_insufficient` | P1 | free < budget (zip × expansion factor + outputs) | **batch** | after cleanup |
 | `acolite.timeout` | P2 | wall clock > limit; process group killed | observation | yes (once) |
 | `acolite.nonzero_exit` | P2 | exit ≠ 0 (rare; still recorded) | observation | yes (once) |

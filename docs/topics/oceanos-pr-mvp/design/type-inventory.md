@@ -65,7 +65,7 @@ new run that supersedes the old release.
 | `AOI` | dataclass, **keep** | name, geometry, crs | Gains a derived `aoi_id`. Validation unchanged |
 | `GridSpec` | dataclass, **keep** | crs, resolution, bounds, width, height, transform | Validation unchanged |
 | `DeliveryGrid` | model, new | `grid_id`, `aoi_id`, `spec: GridSpec`, `anchor: (x0, y0)`, `buffer_m`, `created_at` | One per AOI version. Anchor `(0, 0)` in EPSG:32619 (T13) |
-| `LandMask` | model, new (DA-1) | `grid_id`, `version`, `coastline_source` (GSHHG version + sha256), `raster: ArtifactRef`, `land_pixels` | Built once per grid. **Applied at P5 to water products (NaN on land)**; recorded in provenance. Amends Q7: ACOLITE never calls its own `land_water_mask` at the tag |
+| `LandMask` | model, new (DA-1) | `grid_id`, `version`, `coastline_source` (CUDEM version + tile-set sha256; DA-1 amendment), `raster: ArtifactRef`, `land_pixels` | Built once per grid. **Applied at P5 to water products (NaN on land)**; recorded in provenance. Amends Q7: ACOLITE never calls its own `land_water_mask` at the tag |
 | `AnalysisMask` | model, new | `grid_id`, `version`, `coastal_buffer_m`, `shallow_depth_m`, `coastline_source`, `bathymetry_source` (dataset + version + sha256), `raster: ArtifactRef`, `water_pixels` | **Statistics only**: excludes the coastal buffer (Q8) and optically shallow water (DA-3). `water_pixels` is the `valid_fraction` denominator |
 | `AnalysisZone` | model, new | `zone_id`, `aoi_id`, `name`, `geometry` (EPSG:4326), `grid_id`, `pixel_count` | Predefined regions with pre-extracted series (T8) |
 
@@ -74,7 +74,7 @@ new run that supersedes the old release.
 | Type | Kind | Fields | Notes |
 |---|---|---|---|
 | `AcolitePin` | model | `release_tag`, `commit_sha` | From config; compared against the installation |
-| `AcoliteInstallation` | model | `root`, `python_executable`, `observed_commit`, `config_version_line`, `luts_present: set[sensor]`, `gshhg_present` (OCEANOS `data/external/gshhg`), `credentials_present`, `free_disk_bytes` | Produced by the preflight probe. **Never** part of any hash |
+| `AcoliteInstallation` | model | `root`, `python_executable`, `observed_commit`, `config_version_line`, `luts_present: set[sensor]`, `credentials_present`, `free_disk_bytes` | Produced by the preflight probe. **Never** part of any hash |
 | `AncillaryTier` | enum | `provisional` → `GMAO_IT_MET`, `final` → `GMAO_MERRA2_MET` | Chosen by scene age against a cutover (Brief assumption: 50 d) |
 | `OwnedSettings` | model | `limit`, `merge_tiles`, `s2_target_res`, `l2w_parameters`, `l2w_mask_threshold`, `dsf_aot_estimate`, `ancillary_type`, `l1r_delete_netcdf`, `extract_inputfile`, `delete_extracted_input=True`, `rgb_rhot=False`, `rgb_rhos=False`, `dsf_residual_glint_correction=True`, `l2w_mask_water_parameters=False`, `netcdf_compression` | **Only** the keys OCEANOS owns. Everything else is left to ACOLITE's sensor-default layer (§9.2). The per-attempt keys `inputfile`, `output` and `runid` are *not* here |
 | `AcoliteParameterSet` | model, new (B4) | `version`, `parameters: tuple[str]` (pinned Q4 list) | Owned by `AcoliteProfile`; the only source of `l2w_parameters` |

@@ -66,7 +66,6 @@ class FailureCode(str, Enum):
     ACOLITE_COMMIT_MISMATCH = "env.acolite_commit_mismatch"
     ACOLITE_VERSION_LINE_MISSING = "env.acolite_version_line_missing"
     LUTS_MISSING = "env.luts_missing"
-    GSHHG_MISSING = "env.gshhg_missing"
     CREDENTIALS_MISSING = "env.credentials_missing"
     DISK_INSUFFICIENT = "env.disk_insufficient"
     ACOLITE_TIMEOUT = "acolite.timeout"
@@ -246,7 +245,6 @@ class AcoliteInstallation(MetadataModel):
     observed_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
     config_version_line: str
     luts_present: set[str]
-    gshhg_present: bool
     credentials_present: bool
     free_disk_bytes: int = Field(ge=0)
 
@@ -611,6 +609,38 @@ class Release(MetadataModel):
         return value.astimezone(UTC)
 
 
+class BathymetrySource(MetadataModel):
+    dataset: str = Field(min_length=1)
+    version: str = Field(min_length=1)
+    sha256: Sha256
+
+
+class AnalysisMask(MetadataModel):
+    """Statistics-only mask per grid: coastal buffer plus per-product optically shallow cut (DA-3, B7)."""
+
+    schema_version: str = "1.0"
+    grid_id: GridId
+    version: str = Field(min_length=1)
+    coastal_buffer_m: float = Field(ge=0)
+    coastline_source: CoastlineSource
+    bathymetry_source: BathymetrySource
+    coastal_buffer: ArtifactRef
+    depth: ArtifactRef
+    water_pixels: int = Field(ge=0)
+    analysis_pixels: dict[str, int]
+    shallow_exclusion_m: dict[str, float | None]
+
+
+class AnalysisMaskRef(MetadataModel):
+    version: str = Field(min_length=1)
+    sha256: Sha256
+
+
+class UsabilityVerdict(str, Enum):
+    USABLE = "usable"
+    UNUSABLE = "unusable"
+
+
 class ProvenanceScene(MetadataModel):
     scene_id: SceneId
     source_id: str = Field(min_length=1)
@@ -684,33 +714,6 @@ class ProvenanceRecord(MetadataModel):
     scientific_label: str | None = None
 
 
-class BathymetrySource(MetadataModel):
-    dataset: str = Field(min_length=1)
-    version: str = Field(min_length=1)
-    sha256: Sha256
-
-
-class AnalysisMask(MetadataModel):
-    """Statistics-only mask per grid: coastal buffer plus per-product optically shallow cut (DA-3, B7)."""
-
-    schema_version: str = "1.0"
-    grid_id: GridId
-    version: str = Field(min_length=1)
-    coastal_buffer_m: float = Field(ge=0)
-    coastline_source: CoastlineSource
-    bathymetry_source: BathymetrySource
-    coastal_buffer: ArtifactRef
-    depth: ArtifactRef
-    water_pixels: int = Field(ge=0)
-    analysis_pixels: dict[str, int]
-    shallow_exclusion_m: dict[str, float | None]
-
-
-class AnalysisMaskRef(MetadataModel):
-    version: str = Field(min_length=1)
-    sha256: Sha256
-
-
 class RangeRule(MetadataModel):
     product_key: str = Field(min_length=1)
     min: float
@@ -741,11 +744,6 @@ class QualityPolicy(MetadataModel):
     coastal_buffer_m: float = Field(ge=0)
     min_analysis_pixels: int = Field(ge=1)
     basis: dict[str, str] = Field(default_factory=dict)
-
-
-class UsabilityVerdict(str, Enum):
-    USABLE = "usable"
-    UNUSABLE = "unusable"
 
 
 class ObservationStatus(str, Enum):

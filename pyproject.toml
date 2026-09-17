@@ -1,7 +1,7 @@
 [project]
 name = "oceanos"
 version = "0.1.0"
-description = "Add your description here"
+description = "Sentinel-2 coastal water-quality pipeline for La Parguera, Puerto Rico, built around a pinned ACOLITE"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -10,7 +10,6 @@ dependencies = [
     "numpy>=2.4.6",
     "pydantic>=2.13.5",
     "pydantic-settings>=2.15.0",
-    "pyogrio>=0.13.0",
     "pyproj>=3.7.2",
     "pystac>=1.15.2",
     "pyyaml>=6.0.3",
@@ -30,16 +29,62 @@ dev = [
     "jsonschema>=4.26.0",
     "mypy>=1.19.1",
     "pytest>=9.1.1",
+    "referencing>=0.37.0",
     "ruff>=0.15.2",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["tests"]
+# The opt-in suites are skipped at collection by tests/conftest.py.
+markers = [
+    "integration: requires the real CDSE catalogue (--run-integration)",
+    "acolite: requires the pinned local ACOLITE install (--run-acolite)",
 ]
 
 [tool.ruff]
 target-version = "py311"
+# The house style is dense; 140 is the gate, not a reformatting target.
+line-length = 140
+
+[tool.ruff.lint]
+select = [
+    "B",    # flake8-bugbear: silent-failure shapes
+    "C4",   # comprehension clarity
+    "D",    # docstring layout (D1 off: docstrings stay a judgement call)
+    "E",    # pycodestyle errors
+    "F",    # pyflakes: dead names and unused imports
+    "I",    # import order
+    "N",    # naming
+    "PLC",  # pylint conventions, incl. imports outside top level
+    "PLE",  # pylint errors
+    "PLW",  # pylint warnings
+    "RUF",
+    "SIM",
+    "UP",   # pyupgrade
+    "W",
+]
+ignore = [
+    "D1",     # missing docstrings are reviewed, not linted
+    "D203",   # conflicts with D211
+    "D213",   # conflicts with D212
+    "D401",   # descriptive docstrings ("True where ...") read better than imperative here
+    "D404",
+    "N811",   # `CRS as Projection` / `datetime as DateTime` disambiguate two real names
+    "N812",
+    "RUF002", # Spanish docstrings legitimately use accented characters
+    "UP042",  # `str, Enum` stays: StrEnum would change how the members format
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Fixture builders and fake effects take arguments they deliberately ignore.
+"tests/**" = ["N818"]
 
 [tool.mypy]
 python_version = "3.11"
 
 [[tool.mypy.overrides]]
+# Strict scope: the packages the MVP introduced. `index` lands in PLAN Phase 4.
 module = [
     "oceanos.acolite",
     "oceanos.acolite.*",

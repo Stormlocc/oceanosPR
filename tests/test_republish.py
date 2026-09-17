@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from support.pipeline_env import OVERPASS, make_env
 
+from oceanos.__main__ import main
 from oceanos.pipeline.republish import republish
 from oceanos.pipeline.run_one import run_one
 from oceanos.publishing import current_release_id, release_ledger
@@ -43,8 +44,6 @@ def test_policy_bump_creates_new_release_without_acolite_or_acquisition(tmp_path
 
 
 def test_cli_republish_by_observation_and_range(tmp_path: Path, monkeypatch, capsys) -> None:
-    from oceanos.__main__ import main
-
     env = make_env(tmp_path, monkeypatch)
     first = run_one(env.settings, OVERPASS, **env.configs(), dependencies=env.dependencies())
     capsys.readouterr()

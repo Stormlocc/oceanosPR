@@ -26,9 +26,13 @@ from oceanos.config import (
 )
 from oceanos.domain import (
     AcoliteInstallation,
+    AcoliteParameterSet,
     AcquiredScene,
     ArtifactRef,
     FailureRecord,
+    ProductSet,
+    PublicationProfile,
+    QualityPolicy,
 )
 from oceanos.pipeline.run_one import RunOneDependencies
 from oceanos.processing.grid import DeliveryGrid, GridSpec
@@ -67,6 +71,21 @@ def scene() -> SceneMetadata:
     )
 
 
+def parameter_set() -> AcoliteParameterSet:
+    """The versioned processing parameters, without building a pipeline environment."""
+    return load_acolite_parameter_set(ROOT / "configs/acolite_parameters.yaml")
+
+
+def product_set() -> ProductSet:
+    """The versioned product set, without building a pipeline environment."""
+    return load_product_set(ROOT / "configs/products.yaml", parameter_set())
+
+
+def publication_profile() -> PublicationProfile:
+    """The versioned publication profile (the only source of the COG profiles)."""
+    return load_publication_profile(ROOT / "configs/publication.yaml", product_set())
+
+
 @dataclass
 class PipelineEnv:
     root: Path
@@ -80,15 +99,15 @@ class PipelineEnv:
     calls: dict = field(default_factory=lambda: {"acquire": 0, "acolite": 0})
 
     @property
-    def parameters(self):
-        return load_acolite_parameter_set(ROOT / "configs/acolite_parameters.yaml")
+    def parameters(self) -> AcoliteParameterSet:
+        return parameter_set()
 
     @property
-    def products(self):
-        return load_product_set(ROOT / "configs/products.yaml", self.parameters)
+    def products(self) -> ProductSet:
+        return product_set()
 
     @property
-    def policy(self):
+    def policy(self) -> QualityPolicy:
         policy = load_quality_policy(ROOT / "configs/quality.yaml", self.products)
         if self.permissive_glint:
             # The success fixture is the glint-affected scene A window; relax only the residual-glint gates.
@@ -98,8 +117,8 @@ class PipelineEnv:
         return policy
 
     @property
-    def publication(self):
-        return load_publication_profile(ROOT / "configs/publication.yaml", self.products)
+    def publication(self) -> PublicationProfile:
+        return publication_profile()
 
     def configs(self) -> dict:
         return {"parameters": self.parameters, "products": self.products, "policy": self.policy,
@@ -127,7 +146,7 @@ class PipelineEnv:
             return AcoliteInstallation(
                 root="/opt/acolite", python_executable="/opt/acolite/python", observed_commit=PIN_COMMIT,
                 config_version_line="version=20260421.0", luts_present={"S2A_MSI", "S2B_MSI", "S2C_MSI"},
-                gshhg_present=True, credentials_present=True, free_disk_bytes=10**12,
+                credentials_present=True, free_disk_bytes=10**12,
             )
 
         def run_acolite(settings_path: Path, workspace: Path, runid: str, lock):

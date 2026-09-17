@@ -25,8 +25,8 @@ from oceanos.storage import (
     AtomicDirectory,
     StorageLayout,
     WriterLock,
-    _boot_id,
-    _proc_start_time,
+    boot_id,
+    process_start_time,
 )
 
 
@@ -157,9 +157,9 @@ def recover_stale_attempt(
         child_pid is not None
         and child_pgid is not None
         and holder.boot_id is not None
-        and holder.boot_id == _boot_id()
+        and holder.boot_id == boot_id()
         and holder.child_start_time is not None
-        and holder.child_start_time == _proc_start_time(child_pid)
+        and holder.child_start_time == process_start_time(child_pid)
         and holder.child_cmdline is not None
         and (cmdline := _actual_cmdline(child_pid)) is not None
         and "launch_acolite.py" in holder.child_cmdline

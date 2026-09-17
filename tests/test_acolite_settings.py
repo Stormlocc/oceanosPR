@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -105,7 +107,7 @@ def test_parameter_change_changes_profile_and_run_identity() -> None:
         grid_id="grid-0123456789ab", ancillary_tier=AncillaryTier.FINAL,
         contract_version="1",
     )
-    changed = base.model_copy(update={"settings": _owned(PARAMETERS + ("extra",))})
+    changed = base.model_copy(update={"settings": _owned((*PARAMETERS, "extra"))})
 
     assert base.profile_id != changed.profile_id
     assert run_key("aoi-x-0123456789ab/S2A_20260702T150741_R082",
@@ -170,9 +172,6 @@ def test_probe_reports_pin_version_and_prerequisites(tmp_path: Path) -> None:
     for sensor in ("S2A_MSI", "S2B_MSI", "S2C_MSI_V4"):
         (luts / sensor).mkdir(parents=True)
         (luts / sensor / "lut.nc").write_text("x", encoding="utf-8")
-    external = tmp_path / "external/gshhg"
-    external.mkdir(parents=True)
-    (external / "gshhg.zip").write_text("x", encoding="utf-8")
     netrc = tmp_path / ".netrc"
     netrc.write_text("machine earthdata login x password y\n", encoding="utf-8")
 
@@ -180,8 +179,7 @@ def test_probe_reports_pin_version_and_prerequisites(tmp_path: Path) -> None:
     result = probe.probe(
         pin=AcolitePin(release_tag="20260421.0", commit_sha=PIN_COMMIT),
         root=root, python_executable=python, launcher=launcher, luts_dir=root / "data/LUT",
-        external_dir=tmp_path / "external", netrc_path=netrc, disk_path=tmp_path,
-        required_disk_bytes=1,
+        netrc_path=netrc, disk_path=tmp_path, required_disk_bytes=1,
     )
 
     assert result.observed_commit == PIN_COMMIT
@@ -203,7 +201,7 @@ def test_subprocess_runner_records_child_and_terminates_timed_out_group(tmp_path
 
     with lock.hold("att-20260915T120000Z-01234567"):
         outcome = SubprocessAcoliteRunner().run(
-            python_executable=Path(__import__("sys").executable), launcher=launcher,
+            python_executable=Path(sys.executable), launcher=launcher,
             settings_path=settings, workspace=workspace, timeout_seconds=0.1,
             runid="att-20260915T120000Z-01234567", lock=lock,
         )
@@ -219,9 +217,6 @@ def test_subprocess_runner_records_child_and_terminates_timed_out_group(tmp_path
 
 
 def test_subprocess_runner_activates_geospatial_paths_from_interpreter_prefix(tmp_path: Path) -> None:
-    import os
-    import sys
-
     prefix = tmp_path / "env"
     (prefix / "bin").mkdir(parents=True)
     (prefix / "share/proj").mkdir(parents=True)

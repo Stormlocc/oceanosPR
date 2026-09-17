@@ -10,6 +10,7 @@ from pathlib import Path
 
 from oceanos.aoi import AOIError, get_bounds, load_aoi, validate_aoi
 from oceanos.catalog import (
+    L1C_COLLECTION,
     CdseODataProvider,
     LocalCatalogError,
     LocalSceneCatalog,
@@ -19,11 +20,18 @@ from oceanos.catalog import (
 )
 from oceanos.config import (
     ConfigurationError,
+    OceanosSettings,
     load_acolite_parameter_set,
     load_config,
     load_product_set,
     load_publication_profile,
     load_quality_policy,
+)
+from oceanos.domain import (
+    AcoliteParameterSet,
+    ProductSet,
+    PublicationProfile,
+    QualityPolicy,
 )
 from oceanos.ingestion import AcquisitionError, acquire_scene
 from oceanos.ingestion.cdse_auth import CdseTokenClient
@@ -38,14 +46,13 @@ from oceanos.pipeline.run_one import (
     PipelineError,
     check_releases,
     latest_release_dir,
+    layout_for,
     run_one,
 )
 from oceanos.processing.grid import DeliveryGrid, build_delivery_grid
 from oceanos.processing.masks import AnalysisMaskError
 from oceanos.publishing import ReconcileError
-from oceanos.storage import StorageLayout, WriterLockedError
-
-L1C_COLLECTION = "sentinel-2-l1c"
+from oceanos.storage import WriterLockedError
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -127,7 +134,7 @@ def _print_scenes(scenes: list[SceneMetadata]) -> None:
         ])
     widths = [max(len(row[index]) for row in rows) for index in range(len(rows[0]))]
     for index, row in enumerate(rows):
-        print(" | ".join(value.ljust(width) for value, width in zip(row, widths)))
+        print(" | ".join(value.ljust(width) for value, width in zip(row, widths, strict=True)))
         if index == 0:
             print("-+-".join("-" * width for width in widths))
     print(f"{len(scenes)} scene(s) found." if scenes else "0 scenes found.")
@@ -144,19 +151,14 @@ def _dates(start: str, end: str) -> tuple[datetime, datetime]:
         raise ValueError("start/end must be ordered ISO dates or timezone-aware datetimes") from exc
 
 
-def _catalog(settings, override: Path | None) -> LocalSceneCatalog:
+def _catalog(settings: OceanosSettings, override: Path | None) -> LocalSceneCatalog:
     return LocalSceneCatalog(override or settings.catalog_dir, collection_id=L1C_COLLECTION)
 
 
-def _layout(settings) -> StorageLayout:
-    storage = settings.storage
-    return StorageLayout(
-        raw=storage.raw, work=storage.work, archive=storage.archive, products=storage.products,
-        superseded=storage.superseded, state=storage.state,
-    )
-
-
-def _downstream_configs(config: Path):
+def _downstream_configs(
+    config: Path,
+) -> tuple[AcoliteParameterSet, ProductSet, QualityPolicy, PublicationProfile]:
+    """Load the four versioned science configs that sit beside ``config``."""
     parameters = load_acolite_parameter_set(config.parent / "acolite_parameters.yaml")
     products = load_product_set(config.parent / "products.yaml", parameters)
     policy = load_quality_policy(config.parent / "quality.yaml", products)
@@ -191,7 +193,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             check_releases(settings)
             aoi = load_aoi(settings.aoi.path, name=settings.aoi.name, target_crs=settings.aoi.target_crs)
             grid = build_delivery_grid(aoi)
-            path = _layout(settings).grid_json(aoi.aoi_id)
+            path = layout_for(settings).grid_json(aoi.aoi_id)
             grid.save(path)
             print(f"Grid: {grid.grid_id}; {grid.spec.width} x {grid.spec.height}; {path}")
         elif args.command == "scenes" and args.scenes_command == "search":
@@ -232,7 +234,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             if args.overpass not in groups:
                 raise ValueError(f"overpass not found in local catalog: {args.overpass}")
             aoi = load_aoi(settings.aoi.path, name=settings.aoi.name, target_crs=settings.aoi.target_crs)
-            grid = DeliveryGrid.load(_layout(settings).grid_json(aoi.aoi_id))
+            grid = DeliveryGrid.load(layout_for(settings).grid_json(aoi.aoi_id))
             coverage, selected_scenes = select_minimal_cover_with_scenes(groups[args.overpass], grid)
             token = CdseTokenClient(settings.scenes.identity_url)
             raw_root = args.raw_dir or settings.storage.raw
@@ -277,9 +279,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 check_releases(settings)
             catalog = _catalog(settings, args.catalog_dir)
             if args.catalog_command == "add":
-                result = SceneSearchResult.model_validate_json(args.scenes_file.read_text(encoding="utf-8"))
-                inserted = sum(catalog.add_scene(scene) for scene in result.scenes)
-                print(f"Added: {inserted}; already present: {len(result.scenes) - inserted}")
+                discovered = SceneSearchResult.model_validate_json(args.scenes_file.read_text(encoding="utf-8"))
+                inserted = sum(catalog.add_scene(scene) for scene in discovered.scenes)
+                print(f"Added: {inserted}; already present: {len(discovered.scenes) - inserted}")
             else:
                 _print_scenes(catalog.search_local_catalog())
     except (

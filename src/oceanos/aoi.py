@@ -9,6 +9,7 @@ import unicodedata
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
+from typing import Any
 
 from pyproj import CRS, Transformer
 from pyproj.exceptions import CRSError, ProjError
@@ -36,7 +37,7 @@ class AOI:
         """Return the stable id of the named EPSG:4326 GeoJSON boundary."""
         return derive_aoi_id(self)
 
-    def to_geojson(self) -> dict:
+    def to_geojson(self) -> dict[str, Any]:
         """Return an RFC 7946 Feature in WGS84 longitude/latitude.
 
         Projected AOIs are transformed back to EPSG:4326 for interoperability.
@@ -60,7 +61,9 @@ class AOI:
 def derive_aoi_id(aoi: AOI) -> str:
     """Hash canonical WGS84 GeoJSON while keeping a readable name slug."""
     validate_aoi(aoi)
-    def canonicalize(value):
+
+    def canonicalize(value: Any) -> Any:
+        """Round floats so an identical boundary always hashes the same."""
         if isinstance(value, float):
             return round(value, 12)
         if isinstance(value, (list, tuple)):
@@ -68,6 +71,7 @@ def derive_aoi_id(aoi: AOI) -> str:
         if isinstance(value, dict):
             return {key: canonicalize(item) for key, item in value.items()}
         return value
+
     canonical = json.dumps(
         canonicalize(aoi.to_geojson()), sort_keys=True, separators=(",", ":"),
         ensure_ascii=False, allow_nan=False,
@@ -160,7 +164,8 @@ def load_aoi(
 def get_bounds(aoi: AOI) -> tuple[float, float, float, float]:
     """Return (min_x, min_y, max_x, max_y) in the AOI's current CRS."""
     validate_aoi(aoi)
-    return aoi.geometry.bounds
+    west, south, east, north = aoi.geometry.bounds
+    return float(west), float(south), float(east), float(north)
 
 
 def reproject_aoi(aoi: AOI, target_crs: str | CRS) -> AOI:

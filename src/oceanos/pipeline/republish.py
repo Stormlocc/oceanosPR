@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Literal
 
 from oceanos.aoi import load_aoi
-from oceanos.catalog import LocalSceneCatalog
+from oceanos.catalog import L1C_COLLECTION, LocalSceneCatalog
 from oceanos.config import OceanosSettings
 from oceanos.domain import (
     AcoliteProfile,
@@ -26,7 +26,7 @@ from oceanos.pipeline.downstream import (
     load_archived_outputs,
     publish_downstream,
 )
-from oceanos.pipeline.run_one import L1C_COLLECTION, layout_for
+from oceanos.pipeline.run_one import layout_for
 from oceanos.processing.grid import DeliveryGrid
 from oceanos.publishing import current_release_id, read_item, reconcile
 from oceanos.publishing.release import FaultHook

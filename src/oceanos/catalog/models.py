@@ -1,4 +1,8 @@
-"""Provider-independent scene metadata. Geometry and bbox always use WGS84 x/y."""
+"""Provider-independent scene metadata. Geometry and bbox always use WGS84 x/y.
+
+Nothing downstream of ``oceanos.catalog`` sees a provider's vocabulary: the adapters
+(``cdse``, ``local``) translate into these models and only these models travel.
+"""
 
 from __future__ import annotations
 
@@ -8,11 +12,9 @@ from datetime import datetime as DateTime
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator
+from pydantic import AwareDatetime, Field, field_validator
 
-
-class MetadataModel(BaseModel):
-    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+from oceanos.domain import MetadataModel
 
 
 class PolygonGeometry(MetadataModel):

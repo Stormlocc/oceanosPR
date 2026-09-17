@@ -30,7 +30,11 @@ def safe_zip(*, granules: int = 1, omit: str | None = None) -> bytes:
         members = ["SCENE.SAFE/MTD_MSIL1C.xml"]
         for index in range(granules):
             root = f"SCENE.SAFE/GRANULE/G{index}"
-            members.extend([f"{root}/MTD_TL.xml", *(f"{root}/IMG_DATA/T_BAND_{band}.jp2" for band in BANDS), f"{root}/QI_DATA/MSK_DETFOO_B01.jp2"])
+            members.extend([
+                f"{root}/MTD_TL.xml",
+                *(f"{root}/IMG_DATA/T_BAND_{band}.jp2" for band in BANDS),
+                f"{root}/QI_DATA/MSK_DETFOO_B01.jp2",
+            ])
         for member in members:
             if member != omit:
                 archive.writestr(member, b"x")
@@ -45,7 +49,10 @@ def scene(payload: bytes, *, online: bool = True, md5: str | None = None) -> Sce
         bbox=(-67.2, 17.8, -66.8, 18.2), source_catalog="https://catalogue.example", processing_level="Level-1C",
         relative_orbit=82, datatake_id="GS2A_20260702T150741_057594_N05.12", overpass_id="S2A_20260702T150741_R082",
         mgrs_tile="19QGV", source_id="uuid", online=online, checksums=ProviderChecksums(md5=digest, blake3="b" * 64),
-        assets={"product": SceneAsset(href="https://download.example/Products(uuid)/$value", media_type="application/zip", file_size=len(payload))},
+        assets={"product": SceneAsset(
+            href="https://download.example/Products(uuid)/$value",
+            media_type="application/zip", file_size=len(payload),
+        )},
     )
 
 
@@ -114,9 +121,11 @@ def test_cached_safe_recovers_catalog_after_prior_sync_failure(monkeypatch, tmp_
         raise LocalCatalogError("injected catalog failure")
 
     monkeypatch.setattr(catalog, "record_acquisition", failed_sync)
-    response = lambda _: httpx.Response(200, content=payload, headers={"Content-Length": str(len(payload))})
+    def complete_response(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=payload, headers={"Content-Length": str(len(payload))})
+
     with (
-        httpx.Client(transport=httpx.MockTransport(response)) as client,
+        httpx.Client(transport=httpx.MockTransport(complete_response)) as client,
         pytest.raises(LocalCatalogError, match="injected catalog failure"),
     ):
         acquire_scene(source, tmp_path / "raw", catalog=catalog, token_provider=lambda: "token", client=client)
@@ -142,8 +151,8 @@ def test_cached_safe_recovers_catalog_after_prior_sync_failure(monkeypatch, tmp_
     ("source_factory", "payload_factory", "code"),
     [
         (lambda data: scene(data, md5="0" * 32), lambda data: data, "input.md5_mismatch"),
-        (lambda data: scene(data), lambda data: safe_zip(omit="SCENE.SAFE/GRANULE/G0/MTD_TL.xml"), "input.safe_members_missing"),
-        (lambda data: scene(data), lambda data: safe_zip(granules=2), "input.safe_members_missing"),
+        (scene, lambda data: safe_zip(omit="SCENE.SAFE/GRANULE/G0/MTD_TL.xml"), "input.safe_members_missing"),
+        (scene, lambda data: safe_zip(granules=2), "input.safe_members_missing"),
     ],
 )
 def test_invalid_download_is_never_published(tmp_path: Path, source_factory, payload_factory, code: str) -> None:
@@ -158,16 +167,19 @@ def test_invalid_download_is_never_published(tmp_path: Path, source_factory, pay
 
 def test_offline_product_never_requests_download(tmp_path: Path) -> None:
     payload = safe_zip()
-    with pytest.raises(AcquisitionError, match="input.product_offline"):
+    with pytest.raises(AcquisitionError, match=r"input\.product_offline"):
         acquire_scene(scene(payload, online=False), tmp_path / "raw", token_provider=lambda: pytest.fail("no token"))
 
 
 def test_refetch_sha_mismatch_is_rejected(tmp_path: Path) -> None:
     payload = safe_zip()
     source = scene(payload)
+    def complete_response(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=payload, headers={"Content-Length": str(len(payload))})
+
     with (
-        httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(200, content=payload, headers={"Content-Length": str(len(payload))}))) as client,
-        pytest.raises(AcquisitionError, match="input.refetch_mismatch"),
+        httpx.Client(transport=httpx.MockTransport(complete_response)) as client,
+        pytest.raises(AcquisitionError, match=r"input\.refetch_mismatch"),
     ):
         acquire_scene(source, tmp_path / "raw", token_provider=lambda: "token", client=client, expected_sha256="0" * 64)
 
@@ -200,11 +212,14 @@ def test_token_is_reused_then_refreshed_below_300_seconds(monkeypatch, tmp_path:
 def test_partial_range_response_is_rejected(tmp_path: Path) -> None:
     payload = safe_zip()
     source = scene(payload)
-    response = lambda _: httpx.Response(206, content=payload, headers={
-        "Content-Length": str(len(payload)), "Content-Range": f"bytes 0-{len(payload) - 1}/{len(payload)}",
-    })
+    def partial_response(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(206, content=payload, headers={
+            "Content-Length": str(len(payload)),
+            "Content-Range": f"bytes 0-{len(payload) - 1}/{len(payload)}",
+        })
+
     with (
-        httpx.Client(transport=httpx.MockTransport(response)) as client,
+        httpx.Client(transport=httpx.MockTransport(partial_response)) as client,
         pytest.raises(AcquisitionError, match="requires HTTP 200"),
     ):
         acquire_scene(source, tmp_path / "raw", token_provider=lambda: "token", client=client)

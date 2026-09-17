@@ -10,11 +10,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 import rasterio
-from support.pipeline_env import OVERPASS, ROOT, make_env
+from support.pipeline_env import OVERPASS, ROOT, make_env, publication_profile
 
 from oceanos.domain import ProvenanceRecord, Release
 from oceanos.pipeline.run_one import run_one
-from oceanos.publishing import BITFIELD_COG, CONTINUOUS_COG, write_cog
+from oceanos.publishing import write_cog
 from oceanos.publishing.cog import overview_count
 
 
@@ -50,12 +50,14 @@ def _write(path: Path, data: np.ndarray) -> Path:
 
 
 def test_cog_profiles_force_overviews_and_keep_bitfield_values(tmp_path: Path) -> None:
+    # The profiles under test are the versioned ones the pipeline publishes with.
+    profile = publication_profile()
     rng = np.random.default_rng(7)
     continuous = _write(tmp_path / "c.tif", rng.random((300, 300), dtype="float32"))
     flags = _write(tmp_path / "f.tif", rng.choice(np.array([0, 1, 16, 33], dtype="int32"), size=(300, 300)))
 
-    write_cog(continuous, tmp_path / "c_cog.tif", CONTINUOUS_COG)
-    write_cog(flags, tmp_path / "f_cog.tif", BITFIELD_COG)
+    write_cog(continuous, tmp_path / "c_cog.tif", profile.continuous)
+    write_cog(flags, tmp_path / "f_cog.tif", profile.bitfield)
 
     with rasterio.open(tmp_path / "c_cog.tif") as dataset:
         assert dataset.overviews(1) and dataset.tags(ns="IMAGE_STRUCTURE")["PREDICTOR"] == "3"
@@ -65,7 +67,7 @@ def test_cog_profiles_force_overviews_and_keep_bitfield_values(tmp_path: Path) -
         assert set(np.unique(overview)) <= {0, 1, 16, 33}
     assert overview_count(256, 256, 256) == 1 and overview_count(1602, 1125, 256) == 3
     with pytest.raises(ValueError):
-        write_cog(flags, tmp_path / "wrong.tif", CONTINUOUS_COG)
+        write_cog(flags, tmp_path / "wrong.tif", profile.continuous)
 
 
 def test_release_directory_contents_hashes_and_verifier(published) -> None:

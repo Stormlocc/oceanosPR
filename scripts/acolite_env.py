@@ -165,7 +165,7 @@ def check(settings: OceanosSettings) -> None:
     installation = InstallationProbe().probe(
         pin=AcolitePin(release_tag=config.release_tag, commit_sha=config.commit_sha),
         root=config.root, python_executable=config.python_executable, launcher=config.launcher,
-        luts_dir=config.luts_dir, external_dir=config.external_dir, netrc_path=netrc_path,
+        luts_dir=config.luts_dir, netrc_path=netrc_path,
         disk_path=existing_ancestor(settings.storage.work), required_disk_bytes=REQUIRED_DISK_BYTES,
     )
     if isinstance(installation, FailureRecord):

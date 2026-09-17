@@ -41,7 +41,7 @@ def test_live_second_writer_gets_internal_writer_locked(tmp_path: Path) -> None:
     second = WriterLock(tmp_path / "state/writer.lock")
     with (
         first.hold(ATTEMPT_ID),
-        pytest.raises(WriterLockedError, match="internal.writer_locked"),
+        pytest.raises(WriterLockedError, match=r"internal\.writer_locked"),
     ):
         second.acquire("att-20260915T120001Z-01234567")
 

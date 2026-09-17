@@ -12,6 +12,7 @@ import pytest
 import rasterio
 from support.pipeline_env import BATHYMETRY, FIXTURES, OVERPASS, make_env
 
+from oceanos.__main__ import main
 from oceanos.domain import FailureCode, RunState
 from oceanos.pipeline.archive import AttemptsLedger
 from oceanos.pipeline.run_one import PipelineError, latest_release_dir, run_one
@@ -110,8 +111,6 @@ def test_run_one_requires_prior_grid_and_scene_search(tmp_path: Path, monkeypatc
 
 
 def test_cli_latest_release_prints_current_release(tmp_path: Path, monkeypatch, capsys) -> None:
-    from oceanos.__main__ import main
-
     env = make_env(tmp_path, monkeypatch)
     with pytest.raises(SystemExit):
         main(["pipeline", "latest-release", "--overpass", OVERPASS, "--config", str(env.config)])

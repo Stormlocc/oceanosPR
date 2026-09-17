@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from oceanos import storage
 from oceanos.storage import (
     AtomicDirectory,
     StorageLayout,
@@ -31,8 +32,6 @@ def test_atomic_directory_rolls_back_failed_replacement(monkeypatch, tmp_path: P
         (staging / "value").write_text("new", encoding="utf-8")
         raise RuntimeError("abort")
     assert (destination / "value").read_text(encoding="utf-8") == "old"
-
-    from oceanos import storage
 
     real_replace = storage.os.replace
     calls = []
@@ -60,7 +59,7 @@ def test_writer_lock_records_holder_and_rejects_second_writer(tmp_path: Path) ->
         assert inspection.holder.attempt_id == "att-20260915T120000Z-01234567"
         assert inspection.holder.child_pid is None
         with (
-            pytest.raises(WriterLockedError, match="internal.writer_locked"),
+            pytest.raises(WriterLockedError, match=r"internal\.writer_locked"),
             second.hold("att-20260915T120001Z-01234567"),
         ):
             pass

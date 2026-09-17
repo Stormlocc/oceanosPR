@@ -121,7 +121,7 @@ For every completed phase, at minimum run:
 
 ```bash
 uv run pytest -q
-uv run ruff check src tests
+uv run ruff check src tests scripts
 ```
 
 Use the PLAN-defined opt-in suites only when required:

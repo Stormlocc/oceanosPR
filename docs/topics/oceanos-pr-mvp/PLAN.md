@@ -297,6 +297,126 @@ the next unit and is still `[TODO]`.
 | `uv run mypy src/oceanos/acolite src/oceanos/domain.py src/oceanos/pipeline` | clean, 14 files |
 | `uv run python -m oceanos aoi info --config configs/mvp.yaml` | exit 0 |
 
+### Resolved after lock (limpieza integral, 2026-09-17)
+
+The user asked for a full clean-up of the repository: dead code, unused files and tests, legibility,
+and a documentation sync. This is tooling, hygiene and documentation only, **plus one contract change
+the user authorised explicitly** (GSHHG). No stage, pinned value, acceptance criterion or phase
+boundary moved, and **Phase 4 remains the next unit, still `[TODO]`**.
+
+**1. GSHHG retired — a Phase 7 item pulled forward, authorised by the user.** The 2026-09-16 section
+above recorded GSHHG as "not touched" because retiring it changes the domain model. The user was
+asked and chose to retire it now:
+
+| Retired | Evidence it was dead |
+| --- | --- |
+| `FailureCode.GSHHG_MISSING` | Raised only by the `InstallationProbe` check removed below. |
+| `AcoliteInstallation.gshhg_present` | Written as a literal `True`; no consumer ever read it. |
+| The GSHHG check in `InstallationProbe.probe` | The land mask reads CUDEM since the DA-1 amendment; the probe still refused a run for a dataset nothing used. |
+| `InstallationProbe.probe(external_dir=...)` | Its only use was locating `external_dir / "gshhg"`. The CUDEM tiles under `external_dir` are verified by `fetch_reference_data.py`, not by the probe. |
+| `fetch_reference_data.py` dataset `gshhg`, `_GSHHG_URL`, `Dataset.members`, `extract()` | GSHHG was the only archive input, so the whole unpack path went with it. |
+| `pyogrio` (runtime dependency) | Added in Phase 0 as the vector reader for the GSHHG shapefile; never imported by any module. Removing it also dropped its transitive `pandas`, the unused dependency `CURRENT_STATE.md` §2.13 flagged. |
+| `tests/test_scripts.py::test_reference_extraction_keeps_only_the_required_members` | Tested `extract()` exclusively. |
+
+**Kept deliberately, and now documented as such:** `tests/fixtures/acolite/gshhg_clip.geojson`,
+`window.json`'s `geometric_counts`, the three fixture-selection tests that read them, and the
+`ogr2ogr` clip step in `scripts/make_acolite_fixtures.py`. They are the **frozen Phase 1 record of
+how the fixture window was chosen**, under the coastline source in force then - provenance, not live
+behaviour. Both the test module and the generator now say so in their docstrings. Re-generating the
+clip would need a GSHHG archive supplied by hand via `--gshhg`.
+
+**Consequence for Phase 6 — needs a decision before that phase runs.** Phase 6 and decision D-5 both
+specify "a simplified **GSHHG** coastline GeoJSON" as the viewer's map context, written to
+`products/<aoi>/grid/coastline.geojson`. GSHHG is no longer fetched by this repository, so Phase 6
+cannot produce that file as written. The obvious substitute is the **0 m contour of the pinned CUDEM
+tiles**, which is already the land mask's own boundary and keeps the "no external basemap"
+constraint (PRD §12) intact at no new dependency. **This is not decided here.** Phase 6 is `[TODO]`
+and the choice belongs to whoever opens it; D-5's intent (no external basemap) is unaffected either
+way.
+
+**2. Dead code removed** (zero consumers in `src`, `tests` or `scripts`):
+
+| Removed | Evidence |
+| --- | --- |
+| `LocalSceneCatalog.record_materialization` (34 lines) | The Fase 4 per-band materialization path; `record_acquisition` replaced it whole. No caller anywhere. |
+| `quality.EXCLUDING_FLAGS` | Superseded by `valid_flag_pixels`, which composes `CLOUD_FLAGS` with the two other named bits. |
+| `CONTINUOUS_COG`, `BITFIELD_COG`, `DISPLAY_COG` (`publishing/cog.py`) | A second source of truth for the COG profiles beside `configs/publication.yaml`. `DISPLAY_COG` had no reader at all; the other two only had tests, which now exercise the versioned profile instead - a stronger test. |
+| `docs/examples/scenes.json` | A synthetic **L2A** `SceneSearchResult` from the retired lineage; its only mention was a file listing in `CURRENT_STATE.md`. |
+| `tests/test_package.py` | Asserted `__version__ == "0.1.0"`; every other test already imports the package. |
+| `data/{,catalog/,intermediate/,products/,raw/}.gitignore` | Placeholders for tiers, two of which no longer exist. Every stage creates its tier with `mkdir(parents=True, exist_ok=True)`; the layout is documented in `topology.md` §2.1. `data/` is now ignored outright, as CLAUDE.md always required. |
+
+**3. Duplication collapsed.** The same 6-line SHA-256 loop existed in seven places. `topology.md`
+already assigns "`ArtifactRef` hashing" to `oceanos.storage`, so `file_sha256` and `artifact_ref`
+now live there and the six library copies are gone. `scripts/verify_release.py` keeps its own copy
+**on purpose** - a release verifier must not trust the library that wrote the release - and now says
+so. Also collapsed: `L1C_COLLECTION` (3 definitions -> 1, exported by `oceanos.catalog`),
+`layout_for` (`__main__` had a byte-identical `_layout`), the MSI band order (`acolite/products.py`
+duplicated `acolite/mapping.py`'s), the GeoTIFF/COG media types, and `MetadataModel`
+(`catalog/models.py` redefined `domain`'s).
+
+**4. Legibility, with no behaviour change.** `__import__("re").fullmatch(...)` mid-parser became a
+compiled module constant; four function-local imports moved to the top (the one in
+`make_acolite_fixtures.py` stays local, and now explains why); an over-indented block in
+`_validate_safe` was fixed while splitting it into `_is_complete_safe`; `fetch.py` stopped building
+a throwaway `StorageLayout` and mutating its `.raw`; `verify.py`'s flag table stopped being wedged
+against the end of the preceding function; `domain.py`'s four forward references now appear before
+their user; and three `except` blocks that discarded the original cause now chain it.
+
+`storage._boot_id` / `storage._proc_start_time` became public `boot_id` / `process_start_time`,
+which closes the "`archive.py` imports private names" item under "Known, pre-existing".
+
+**5. Tooling.** `pyproject.toml` gained a real `description`, a `[tool.pytest.ini_options]` section
+(so the markers `conftest.py` registers are declared where the rest of the config lives), and an
+explicit `[tool.ruff.lint]` rule set: `B, C4, D, E, F, I, N, PLC, PLE, PLW, RUF, SIM, UP, W` at
+`line-length = 140`, with every ignore carrying its reason. This is a real widening - the previous
+config selected ruff's default `E4/E7/E9/F` only. Twelve over-long lines were wrapped and the rest
+of the new findings fixed; `ruff check src tests scripts` is clean at the new level.
+
+`referencing` is now a declared dev dependency: `scripts/verify_release.py` imports it directly and
+was relying on it arriving transitively through `jsonschema`.
+
+**6. `.gitignore` bug fixed.** The pattern `catalog/` had no leading slash, so it also matched
+`src/oceanos/catalog/`. The package's files were already tracked, so nothing was lost - but any new
+file added there would have been silently ignored. Every root-level pattern is now anchored, and
+`git ls-files -i -c --exclude-standard` returns empty.
+
+**7. Type errors closed in the non-strict modules.** `uv run mypy src` went from 56 errors to 22, and
+**all 22 are missing third-party stubs** (`rasterio`, `shapely`, `yaml`) - zero real type errors
+remain. The fixes were annotations and explicit None-guards, except two documented `type: ignore`
+comments where pystac's stubs cannot express what the runtime accepts. The "Known, pre-existing"
+mypy note in `IMPLEMENTATION_HANDOFF.md` is updated accordingly.
+
+**8. Documentation.** `docs/architecture.md` was **rewritten** to describe the current architecture
+(it still described the retired Fase 1-5 lineage behind a scope banner, and its own banner called
+the rewrite a Phase 7 task). `SUMMARY.md` and `CURRENT_STATE.md` now carry explicit *frozen
+snapshot* banners with pointers to the live documents: both were written before implementation and
+`SUMMARY.md` was titled "Estado del proyecto", which read as current. Three Brief decisions that
+were later amended (Q5, Q7, Q13) are marked as amended in `SUMMARY.md` §3. The `README.md` land-mask
+paragraph still said `processing/masks.py` rasterizes **GSHHG**; it now says CUDEM. Design sections
+were synced where they stated current fact (`capability-matrix` C3/C9, `type-inventory`
+`LandMask`/`AcoliteInstallation`, `contracts` §failure table, `topology` §1/§2). Historical evidence
+and superseded decisions were **left as written** - they are the record.
+
+**Quarantine.** `.quarantine-20260916/` held 2.5 GB: the retired L2A rasters, four ACOLITE run
+directories and the discarded AOI slices. On the user's instruction the first two were deleted and
+`aoi-slices-descartadas/` (`w2c_south_02..08`) was kept.
+
+**Verification of this clean-up:**
+
+| Command | Result |
+| --- | --- |
+| `uv run pytest -q` | 183 passed (185 before; the 2 removed tests) |
+| `uv run ruff check src tests scripts` | clean, at the widened rule set |
+| `uv run mypy src/oceanos/acolite src/oceanos/domain.py src/oceanos/pipeline src/oceanos/storage.py src/oceanos/timeseries` | clean, 17 files |
+| `uv run mypy src` | 22 errors, all missing third-party stubs (was 56) |
+| `uv run python -m oceanos aoi info --config configs/mvp.yaml` | exit 0 |
+| `uv run python scripts/acolite_env.py --check` | exit 0, pin `f73cbe73…`, 19 dependencies |
+| `uv run python scripts/fetch_reference_data.py all --check` | exit 0, the 4 CUDEM tiles match their pinned SHA-256 |
+| `git ls-files -i -c --exclude-standard` | empty |
+
+The real ACOLITE probe was **not** re-run: it downloads ~800 MB and runs ACOLITE, and nothing on the
+processing path changed. The last real verdicts remain those in the "Phase 3 closure record".
+
 ## Plan
 
 **Status:** APPROVED FOR IMPLEMENTATION 2026-09-14 (rev 4, final; user: "aprobado") · produced by `/planning:plan`. Every planning gate is closed. Implementation starts at Phase 0 on branch `feat/oceanos-pr-mvp`.
@@ -1071,9 +1191,13 @@ Estimated size: 1 300–1 700 LOC of JS/HTML/CSS.
   Files are fetched once by `scripts/vendor_web.sh` with checksum verification. The exact dist file
   names are confirmed at vendoring time.
 - [ ] **No external basemap (D-5).** PRD §12 lists no external integrations beyond the data provider
-  and ACOLITE. Map context is a simplified GSHHG coastline GeoJSON generated per AOI into
+  and ACOLITE. Map context is a simplified coastline GeoJSON generated per AOI into
   `data/products/<aoi>/grid/coastline.geojson` and served under `/data`. The no-URL grep therefore
   holds.
+  **Open before this phase runs (2026-09-17):** this item and D-5 said *GSHHG* coastline, and GSHHG
+  is no longer fetched by the repository. The recommended substitute is the **0 m contour of the
+  pinned CUDEM tiles** - already the land mask's own boundary, so no new dependency and no change to
+  D-5's intent. Not decided; see "Resolved after lock (limpieza integral, 2026-09-17)" §1.
 - [ ] **Pure logic modules:**
   - `colour.js`: the NaN branch before the ramp;
   - `flags.js`: legend and toggles generated from `classification:bitfields`;
@@ -1133,9 +1257,11 @@ Estimated size: ~300 LOC net, mostly deletions.
     `tests/test_grid.py`.
   - ~~`src/oceanos/composites/`~~ **done 2026-09-15**: dead scaffolding with no importer,
     removed with the script refactor.
-  - **Still open for this phase:** GSHHG (`FailureCode.GSHHG_MISSING`,
-    `AcoliteInstallation.gshhg_present`, the `InstallationProbe` check and
-    `fetch_reference_data.py gshhg`), unused since the DA-1 amendment moved the land mask to CUDEM.
+  - ~~GSHHG (`FailureCode.GSHHG_MISSING`, `AcoliteInstallation.gshhg_present`, the
+    `InstallationProbe` check and `fetch_reference_data.py gshhg`)~~ **done 2026-09-17**, pulled
+    forward at the user's request together with the dead `pyogrio` dependency; see "Resolved after
+    lock (limpieza integral, 2026-09-17)". The Phase 1 fixture-selection artifacts were kept on
+    purpose and are documented as provenance.
 - [ ] **Keep (allow-listed):**
   - ~~the committed `catalog/` L2A collection (`CURRENT_STATE.md` §4)~~ **superseded 2026-09-16**:
     `catalog/` is untracked and ignored; the L2A collection held zero items and went with it;
@@ -1143,13 +1269,17 @@ Estimated size: ~300 LOC net, mostly deletions.
   - `tests/fixtures/stac_item.json`, the 1.0 compatibility fixture;
   - `tests/test_config.py:80` (`PROVIDER=earth-search`), the negative test that keeps the retired
     provider unreachable - allow-list it in the Sanity Check grep, which now prints `1`.
-- [ ] **Docs.** Update `docs/architecture.md` and `SUMMARY.md`. List the ADR candidates from the
-  handoff in `SUMMARY.md` §10.
+- [x] **Docs.** ~~Update `docs/architecture.md` and `SUMMARY.md`~~ **done 2026-09-17**:
+  `architecture.md` rewritten for the current architecture; `SUMMARY.md` and `CURRENT_STATE.md`
+  carry frozen-snapshot banners and the amended Brief decisions are marked. **Still open:** list the
+  ADR candidates from the handoff in `SUMMARY.md` §10.
 - [ ] **User-approval gate (OD2).** Merge `feat/oceanos-pr-mvp` into `master` (local, `--no-ff`).
 
 **Sanity Check:**
 
-- `grep -rnE "earth-search|Sentinel2Provider|build_grid\(|oceanos\.composites" src tests configs | wc -l` prints `0`.
+- `grep -rnE "earth-search|Sentinel2Provider|build_grid\(|oceanos\.composites" src tests configs | wc -l`
+  prints `1`, not `0`: the single hit is `tests/test_config.py`, the negative test in the keep list
+  (recorded 2026-09-16).
 - `grep -rn "sentinel-2-l2a" src tests configs | grep -v -e "tests/fixtures/stac_item.json" -e "test_local_catalog.py" | wc -l` prints `0`.
 - `test ! -d src/oceanos/composites` exits 0.
 - `uv run python scripts/oceanos_update.py --help` exits 0.
@@ -1401,7 +1531,7 @@ Sequential, all phases in the main session, per the table above. Every sub-phase
 | D-2 `[EXEC-SHAPE]` | Coastal buffer starts at **150 m** | Phase 3 `masks.py` default; tunable in config | Brief captured assumption "~100–200 m, fixed empirically after backfill" |
 | D-3 `[EXEC-SHAPE]` | Tier upgrade re-acquires the SAFE by `source_id` + SHA-256 instead of keeping it | 2.1 builds re-acquisition; 4 adds `tests/test_tier_upgrade.py`; `contracts.md` reprocessing table updated | Q10 (discard SAFE); Brief criterion "checksum sufficient to re-fetch deterministically"; CDSE products verified online |
 | D-4 `[FALLBACK — confirm or override]` | Until R2 is answered, one analysis zone = the AOI water area | Phase 4 `zones.geojson` content | R2 open; T8 needs ≥ 1 zone for pre-extraction |
-| D-5 `[EXEC-SHAPE]` | No external basemap; GSHHG coastline GeoJSON gives map context | Phase 6 adds coastline generation; the no-URL grep holds | PRD §12 "External integrations in MVP: satellite data provider and ACOLITE. Nothing else" |
+| D-5 `[EXEC-SHAPE]` | No external basemap; a coastline GeoJSON gives map context. *Source open since 2026-09-17:* GSHHG was retired, CUDEM's 0 m contour recommended | Phase 6 adds coastline generation; the no-URL grep holds | PRD §12 "External integrations in MVP: satellite data provider and ACOLITE. Nothing else" |
 | D-6 `[EXEC-SHAPE]` | Viewer, API and `/data` served same-origin behind Caddy; no CORS | Phase 5 Caddyfile; no CORS config | Viewer boundary `contracts.md` §8; removes a cross-origin credential surface |
 | D-7 `[EXEC-SHAPE]` | A4 is enforced by a literal scan with a vocabulary + allow-list; A1–A3 by an import scan | Phase 0 architecture test design | `topology.md` A4 concerns string literals; `l2_flags` is shared vocabulary |
 | D-8 `[EXEC-SHAPE]` | Spike outcomes are recorded as an exact `**Outcome (pin 20260421.0): …**` token on each V-row | Phase 1 Sanity grep is non-vacuous | The V2 row already contains "verified", so a bare-word grep would pass today |

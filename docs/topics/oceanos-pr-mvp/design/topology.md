@@ -1,7 +1,8 @@
 # Topology — modules and storage
 
-**Status:** rounds 1–2 resolved · 2026-09-14. No convention home is bound in this repository
-(no `AGENTS.md`/`CLAUDE.md` pointer). Therefore `diagram_dialect.system` is **unset** and no C4 view
+**Status:** rounds 1–2 resolved · 2026-09-14; the `Status` column below is the design's
+intent, not today's state - everything except `index` and `api` is implemented (Phases 0-3).
+Reality notes from the 2026-09-17 clean-up are marked inline. Therefore `diagram_dialect.system` is **unset** and no C4 view
 is emitted; `diagram_dialect.data` defaults to `mermaid`, but no typed data artifact is produced
 here. Diagrams below are plain text, matching `CURRENT_STATE.md`.
 
@@ -16,8 +17,8 @@ here. Diagrams below are plain text, matching `CURRENT_STATE.md`.
 | `oceanos.domain` | ids, value objects, enums, profiles, failure taxonomy; **no I/O** | stdlib, pydantic, shapely/pyproj types | anything in `oceanos` except itself | new |
 | `oceanos.config` | settings models + loading; new sections `acolite`, `products`, `quality`, `publication`, `storage`, `api` | `domain` | stages, adapters | extend |
 | `oceanos.aoi` | AOI load/validate/reproject; derives `AoiId` | `domain` | — | keep (+id) |
-| `oceanos.storage` | tier layout (paths from ids), staging + atomic commit + rollback, `ArtifactRef` hashing, `WriterLock` | `domain` | stages, adapters | new (extracted from `normalize_scene`) |
-| `oceanos.catalog` | scene discovery + local scene STAC catalog | `domain`, `config`, `aoi`, `storage` | `acolite`, `processing`, `publishing` | keep; + `cdse.py` `CdseODataProvider` (T22a); `sentinel2.py` unwired, deleted after first L1C run |
+| `oceanos.storage` | tier layout (paths from ids), staging + atomic commit + rollback, `file_sha256`/`artifact_ref`, `WriterLock` | `domain` | stages, adapters | new (extracted from `normalize_scene`) |
+| `oceanos.catalog` | scene discovery + local scene STAC catalog | `domain`, `config`, `aoi`, `storage` | `acolite`, `processing`, `publishing` | keep; `cdse.py` `CdseODataProvider` (T22a); `sentinel2.py` **deleted 2026-09-16** |
 | `oceanos.ingestion` | verified whole-SAFE acquisition: CDSE token, MD5 + SHA-256, zip member check (T22d) | `catalog`, `storage`, `domain` | `acolite`, `processing` | reshape (T22) |
 | `oceanos.acolite` | **the only module that knows ACOLITE vocabulary**: settings rendering, probe, runner, log/NetCDF verification, `FlagSpec` extraction | `domain`, `storage` | `processing`, `publishing`, `api`, `pipeline` | new |
 | `oceanos.processing` | `grid` (keep + AOI-anchored builder), `normalize` (conform), `quality` (pure core), `masks` (coastal analysis mask) | `domain`, `storage`, `aoi` | `acolite`, `publishing`, `api`, `pipeline` | reshape |
@@ -55,11 +56,11 @@ here. Diagrams below are plain text, matching `CURRENT_STATE.md`.
                                                  web/ (HTTP)
 ```
 
-**Rules enforced by an architecture test** (to add alongside the stage work):
+**Rules enforced by an architecture test** (`tests/test_architecture.py`, since Phase 2.2):
 
 - **A1.** `acolite` and `processing` do not import each other. Conformance reads archived NetCDF
   through GDAL; it never calls ACOLITE code. This keeps ACOLITE's vocabulary in one adapter, the same
-  way `catalog/sentinel2.py` confines STAC vocabulary.
+  way `catalog/` confines STAC vocabulary.
 - **A2.** `api` never imports `pipeline`, `acolite`, `publishing` or the index writer. Read/write
   separation is structural, not a convention.
 - **A3.** `domain` imports nothing from `oceanos`.
@@ -72,10 +73,10 @@ ACOLITE is **not** a Python dependency of `oceanos` (Q1, GPLv3 §10.3). It lives
 environment: clone at the pinned tag + micromamba env. `config.acolite` holds its interpreter path,
 launcher path, pin, LUT directory and `external_dir`. `pyproject.toml` gains no ACOLITE entry.
 
-**The environment check found a problem (2026-09-14).** `~/acolite` is a **shallow clone of `main`
-at `d61c8de`** (2026-09-09, "Renamed S2R_L1R to L1R_S2R"), not `20260421.0` / `f73cbe7`. The
-preflight rule `env.acolite_commit_mismatch` would stop the pipeline on this installation, which is
-what it is for. The clone must be replaced with one at the pinned tag before the first run.
+**The environment check found a problem (2026-09-14) - RESOLVED in Phase 1.** `~/acolite` was a
+shallow clone of `main` at `d61c8de`, not `20260421.0` / `f73cbe7`; the preflight rule
+`env.acolite_commit_mismatch` correctly refused it. `scripts/acolite_env.py --install` replaced the
+checkout at the pinned tag, preserving the old one, and `--check` now exits 0 at `f73cbe73…`.
 
 ---
 
@@ -84,7 +85,7 @@ what it is for. The clone must be replaced with one at the pinned tag before the
 ### 2.1 Layout
 
 ```text
-catalog/                                         committed; scene discovery provenance (existing)
+catalog/                                         gitignored since 2026-09-16; rebuilt by `scenes search`
   collections/<h(sentinel-2-l1c)>/items/…        + L1C collection (T22e)
 
 data/                                            gitignored
@@ -99,7 +100,9 @@ data/                                            gitignored
     acolite_run_<id>_l1r_settings_user.txt
     acolite_run_<id>_l2r_settings.txt          sensor-merged, the resolved settings (B14)
   products/<aoi_id>/                             PUBLISHED
-    grid/grid.json  analysis_mask.tif  zones.geojson
+    grid/grid.json  land_mask.{tif,json}         built once per grid from CUDEM (DA-1 amendment)
+         coastal_buffer.tif  depth_m.tif  analysis_mask.json
+         zones.geojson                            Phase 6
     releases/<overpass_id>/<release_id>/         IMMUTABLE (see contracts §4.3)
     stac/catalog.json  collection.json  items/<overpass_id>.json     atomically replaced
   superseded/<aoi_id>/<overpass_id>/<release_id>/  NOT SERVED; previous release moved here at P8 (DA-5), keep 1
@@ -108,7 +111,7 @@ data/                                            gitignored
     ledger/attempts.jsonl                        append-only attempt ledger (incl. purged events; rebuild source for failures)
     ledger/releases.jsonl                        append-only release/supersession events (rebuild source for releases)
     run/api.sock                                 API Unix socket; directory mode 0750
-  external/gshhg/  external/bathymetry/          OCEANOS-owned reference data, checksums pinned in scripts
+  external/bathymetry/cudem/                     OCEANOS-owned CUDEM tiles, checksums pinned in scripts
     writer.lock                                  single-writer lock + holder record
 ```
 
@@ -116,7 +119,7 @@ data/                                            gitignored
 
 | Tier | Mutability | Truth or derived | Writer | Readers | Retention | Size driver |
 |---|---|---|---|---|---|---|
-| `catalog/` | append/update | truth (discovery) | pipeline | pipeline | indefinite; committed | tiny |
+| `catalog/` | append/update | truth (discovery) | pipeline | pipeline | indefinite; **not committed** | tiny |
 | `data/raw` | replace | truth until archived | ingestion | P1–P2 | **until P9** | ~790 MB SAFE per selected tile; **1 tile per overpass for the current AOI** (T22b) |
 | `data/work` | scratch | — | pipeline | pipeline | published: immediate · failed: 14 d | SAFE expansion + L2R peak; the disk budget in P1 |
 | `data/archive` | **immutable** | **truth (processing)** | P4 only | P5 (reprocess), operator | indefinite | L2R + L2W NetCDF, compressed if T25 accepted |

@@ -19,8 +19,8 @@ from oceanos.publishing import (
 )
 
 
-class Crash(RuntimeError):
-    pass
+class CrashError(RuntimeError):
+    """Injected fault: aborts `publish_release` at a chosen step."""
 
 
 @pytest.fixture(autouse=True)
@@ -48,9 +48,9 @@ def test_crash_after_commit_step_keeps_previous_release_until_reconciled(tmp_pat
 
     def crash(name: str) -> None:
         if name == step:
-            raise Crash(name)
+            raise CrashError(name)
 
-    with pytest.raises(Crash):
+    with pytest.raises(CrashError):
         run_one(env.settings, OVERPASS, **env.configs(),
                 force_reprocess=True, dependencies=dependencies, fault=crash)
 
@@ -85,9 +85,9 @@ def test_next_run_after_crash_reconciles_and_publishes_exactly_one_release(tmp_p
 
     def crash(name: str) -> None:
         if name == "release_dir":
-            raise Crash(name)
+            raise CrashError(name)
 
-    with pytest.raises(Crash):
+    with pytest.raises(CrashError):
         run_one(env.settings, OVERPASS, **env.configs(),
                 force_reprocess=True, dependencies=dependencies, fault=crash)
     final = run_one(env.settings, OVERPASS, **env.configs(),

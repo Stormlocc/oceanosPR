@@ -40,7 +40,7 @@ class InstallationProbe:
 
     def probe(
         self, *, pin: AcolitePin, root: Path, python_executable: Path, launcher: Path,
-        luts_dir: Path, external_dir: Path, netrc_path: Path, disk_path: Path,
+        luts_dir: Path, netrc_path: Path, disk_path: Path,
         required_disk_bytes: int,
     ) -> AcoliteInstallation | FailureRecord:
         """Return observed installation state or the first batch failure."""
@@ -81,11 +81,6 @@ class InstallationProbe:
         if present != set(sensor_dirs):
             return self._failure(FailureCode.LUTS_MISSING, "required Sentinel-2 LUTs are missing", sorted(present))
 
-        gshhg = external_dir / "gshhg"
-        gshhg_present = gshhg.is_dir() and any(path.is_file() for path in gshhg.rglob("*"))
-        if not gshhg_present:
-            return self._failure(FailureCode.GSHHG_MISSING, "OCEANOS GSHHG data are missing", ["gshhg"])
-
         try:
             credentials_present = netrc.netrc(str(netrc_path)).authenticators("earthdata") is not None
         except (OSError, netrc.NetrcParseError):
@@ -106,6 +101,6 @@ class InstallationProbe:
         return AcoliteInstallation(
             root=str(root), python_executable=str(python_executable),
             observed_commit=observed_commit, config_version_line=expected_version,
-            luts_present=present, gshhg_present=True, credentials_present=True,
+            luts_present=present, credentials_present=True,
             free_disk_bytes=free_disk_bytes,
         )

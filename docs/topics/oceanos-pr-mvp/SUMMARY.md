@@ -1,8 +1,27 @@
-# OCEANOS PR — Estado del proyecto
+# OCEANOS PR — Cierre de la etapa de planificación (instantánea histórica)
+
+> **CONGELADO el 2026-09-12. No es el estado del proyecto.**
+>
+> Este documento cerró la etapa de **planificación**, antes de que existiera una línea de
+> implementación. Se conserva porque es el insumo que alimentó al PLAN, no porque describa el
+> sistema. Todo lo que dice sobre "el sistema hoy", los tests, la rama o el entorno describe el
+> 2026-09-12 y **hoy es falso**.
+>
+> Para el estado vigente:
+>
+> | Qué necesitas | Dónde vive |
+> | --- | --- |
+> | Estado y próxima acción | [`IMPLEMENTATION_HANDOFF.md`](IMPLEMENTATION_HANDOFF.md) |
+> | Fases y criterios de aceptación | [`PLAN.md`](PLAN.md) |
+> | Arquitectura vigente | [`../../architecture.md`](../../architecture.md) |
+> | Qué corre hoy, con comandos | [`../../../README.md`](../../../README.md) |
+>
+> **Tres decisiones de §3 fueron enmendadas después de cerrar esta instantánea.** Están marcadas
+> en la tabla; la evidencia está en [`design/design-threads.md`](design/design-threads.md).
 
 **Fecha:** 2026-09-12 · **Rama:** `master` @ `9fa73b3` · **Fase:** descubrimiento, producto, investigación y contrato **completos**; arquitectura **no iniciada**.
 
-Punto de entrada a todo lo producido. Cada sección enlaza al documento donde vive el detalle.
+Punto de entrada a todo lo producido en la planificación. Cada sección enlaza al documento donde vive el detalle.
 
 ---
 
@@ -29,7 +48,7 @@ El pipeline corre **descubrimiento → catálogo STAC local → descarga verific
 
 No hay corrección atmosférica, ni enmascarado de calidad, ni producto espectral, ni API, ni forma de mirar nada.
 
-**Defectos menores pendientes:** el script de consola `oceanospr` está roto, hay un `nasa_oceanos_pr.egg-info/` obsoleto sin ignorar, y `pandas` está declarado pero no se importa en ninguna parte.
+**Defectos menores pendientes:** el script de consola `oceanospr` está roto, hay un `nasa_oceanos_pr.egg-info/` obsoleto sin ignorar, y `pandas` está declarado pero no se importa en ninguna parte. *(Los tres resueltos: `oceanospr` en la Fase 0, el `egg-info` en la Fase 0, y `pandas` el 2026-09-17 al retirar `pyogrio`, que era quien lo arrastraba.)*
 
 ---
 
@@ -41,15 +60,15 @@ No hay corrección atmosférica, ni enmascarado de calidad, ni producto espectra
 | Q2 | **OCEANOS adquiere** el SAFE; descubrimiento reorientado a CDSE OData para L1C completo |
 | Q3 | La grilla de la Fase 5 **sobrevive**, reducida a paso de grilla de entrega *posterior* a ACOLITE |
 | Q4 | Productos: `rhow_*`, `Rrs_*`, `rhorc_*`, `tur_nechad2016`, `spm_nechad2016`, `chl_re_gons740`, `fai`, `fait`, `ndvi` |
-| Q5 | Dos compuertas de usabilidad: nubosidad de escena en descubrimiento + `l2_flags == 0` por píxel |
+| Q5 | ~~Dos compuertas: nubosidad de escena + `l2_flags == 0` por píxel~~ **ENMENDADA (V8/DA-2, 2026-09-15):** el bit 0 (umbral SWIR) es informativo y se prende en ~99 % de los píxeles, así que `l2_flags == 0` habría rechazado todo; el predicado vigente es `configs/quality.yaml` |
 | Q6 | Trabajo en `master`, creada sobre `acc6072`; Fase 6/7 abandonadas e inalcanzables |
-| Q7 | Tierra/mar por **máscara geométrica GSHHG**, desacoplada del umbral SWIR (que sube a `0.05`) |
+| Q7 | ~~Tierra/mar por **máscara geométrica GSHHG**~~ **ENMENDADA (DA-1, 2026-09-15):** la máscara de tierra se deriva de la elevación CUDEM > 0 m; GSHHG estaba desplazada ≈ 380 m S sobre La Parguera y se retiró del repositorio el 2026-09-17. El desacople del umbral SWIR (`0.05`) se mantiene |
 | Q8 | Buffer costero **en capas**: excluir ~100–200 m del análisis, conservar la costa en visualización |
 | Q9 | `dsf_aot_estimate=fixed` — el AOI es demasiado pequeño para el DSF por teselas |
 | Q10 | Descartar el SAFE tras procesar; `l1r_delete_netcdf=True`; conservar L2R + L2W + manifiestos |
 | Q11 | `merge_tiles=True` con `limit`; sin mosaicado externo |
 | Q12 | Revisar el límite del AOI antes del backfill; ajustarlo a 19QFV **si es científicamente defendible** |
-| Q13 | Corrección de glint **desactivada**; registrar el ángulo como metadato |
+| Q13 | ~~Corrección de glint **desactivada**~~ **ENMENDADA (V8, 2026-09-15):** `dsf_residual_glint_correction=True`; el ángulo se sigue registrando sin usarse como compuerta, y el glint residual se controla con dos compuertas medidas (rhos negativo, rhow SWIR p90) |
 | Q14 | Pedir `rhorc_*` para mantener calculable el FAI nativo de la literatura |
 | Q15 | Añadir `version=20260421.0` al `config.txt` de despliegue + registrar el SHA del commit |
 | Q16 | **NetCDF archivo + COG publicación**; `l2_flags` en **COG separado** con overviews `MODE`/`NEAREST` |
@@ -124,8 +143,8 @@ Cosas que resultaron distintas de lo que se asumió al principio:
 | Clon ACOLITE (`20260421.0` es el pin candidato) | `~/acolite` | Funcional |
 | Entorno conda (gdal 3.13.3, netCDF4, zarr) | `~/micromamba/envs/acolite` | Funcional |
 | Credenciales | `~/.netrc`, permisos `600` | **Verificadas** |
-| LUTs de corrección atmosférica | `~/acolite/data/LUT` | **Vacío — falta pre-descargar** |
-| GSHHG (línea de costa) | `external_dir` | **Falta descargar** |
+| LUTs de corrección atmosférica | `~/acolite/data/LUT` | ~~**Vacío**~~ resuelto en la Fase 1 (`acolite_env.py --install`) |
+| GSHHG (línea de costa) | `external_dir` | ~~**Falta descargar**~~ **retirado** el 2026-09-17: la costa sale de CUDEM |
 
 `pyproject.toml` y `uv.lock` intactos: instalar ACOLITE como dependencia del proyecto es una decisión de arquitectura que sigue sin tomarse.
 
@@ -146,12 +165,12 @@ Cosas que resultaron distintas de lo que se asumió al principio:
 
 **Pendiente operativo:**
 
-- Pre-descargar LUTs y GSHHG.
-- Cuatro documentos de este tema sin commitear.
+- ~~Pre-descargar LUTs y GSHHG.~~ Resuelto en la Fase 1; GSHHG quedó retirado el 2026-09-17.
+- ~~Cuatro documentos de este tema sin commitear.~~ Commiteados.
 
 ---
 
-## 10. Siguiente paso
+## 10. Siguiente paso *(desde el 2026-09-12; cumplido)*
 
 `/planning:plan`. Tiene todo lo que necesita: producto definido, estado actual evaluado, línea base de ACOLITE verificada, contrato de ingeniería cerrado con 18 decisiones y cero preguntas diferidas, e investigación de publicación validada.
 

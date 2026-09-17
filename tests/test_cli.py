@@ -15,6 +15,7 @@ import pytest
 import yaml
 from shapely.geometry import box, mapping
 
+from oceanos.__main__ import build_parser, main
 from oceanos.catalog import LocalSceneCatalog, SceneMetadata
 from oceanos.domain import AcquiredScene, ArtifactRef
 from oceanos.ingestion import SceneManifest
@@ -35,15 +36,18 @@ def config_path(tmp_path: Path) -> Path:
 def test_module_and_console_help() -> None:
     environment = os.environ.copy()
     environment["PYTHONPATH"] = os.pathsep.join(filter(None, (str(ROOT / "src"), environment.get("PYTHONPATH"))))
-    module = subprocess.run([sys.executable, "-m", "oceanos", "--help"], cwd=ROOT, env=environment, capture_output=True, text=True, check=False)
-    script = subprocess.run(["uv", "run", "oceanospr", "--help"], cwd=ROOT, capture_output=True, text=True, check=False)
+    module = subprocess.run(
+        [sys.executable, "-m", "oceanos", "--help"],
+        cwd=ROOT, env=environment, capture_output=True, text=True, check=False,
+    )
+    script = subprocess.run(
+        ["uv", "run", "oceanospr", "--help"], cwd=ROOT, capture_output=True, text=True, check=False,
+    )
     assert module.returncode == script.returncode == 0
     assert "NASA OCEANOS Puerto Rico" in module.stdout
 
 
 def test_aoi_json_and_grid_build(tmp_path: Path, capsys) -> None:
-    from oceanos.__main__ import main
-
     config = config_path(tmp_path)
     assert main(["aoi", "info", "--json", "--config", str(config)]) == 0
     document = json.loads(capsys.readouterr().out)
@@ -68,8 +72,6 @@ def discovered_scene() -> SceneMetadata:
 
 
 def test_search_registers_l1c_and_overpasses_count(monkeypatch, tmp_path: Path, capsys) -> None:
-    from oceanos.__main__ import main
-
     config = config_path(tmp_path)
     fake = SimpleNamespace(search=lambda *args, **kwargs: [discovered_scene()])
     monkeypatch.setattr("oceanos.__main__.CdseODataProvider", lambda *args, **kwargs: fake)
@@ -83,8 +85,6 @@ def test_search_registers_l1c_and_overpasses_count(monkeypatch, tmp_path: Path, 
 
 
 def test_acquire_uses_only_selected_scene_id_and_builds_input_set(monkeypatch, tmp_path: Path, capsys) -> None:
-    from oceanos.__main__ import main
-
     config = config_path(tmp_path)
     catalog = LocalSceneCatalog(tmp_path / "catalog")
     base = discovered_scene()
@@ -132,8 +132,6 @@ def test_acquire_uses_only_selected_scene_id_and_builds_input_set(monkeypatch, t
 
 
 def test_retired_l2a_commands_are_not_parseable() -> None:
-    from oceanos.__main__ import build_parser
-
     parser = build_parser()
     with pytest.raises(SystemExit):
         parser.parse_args(["scenes", "fetch", "scene"])

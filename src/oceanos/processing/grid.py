@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
+from typing import Any
 
 from pydantic import AwareDatetime, ConfigDict, Field, field_serializer, field_validator
 from pyproj import CRS as Projection
@@ -28,7 +29,7 @@ def metric_crs(value: str | CRS) -> CRS:
     return crs
 
 
-def buffered_aoi(aoi: AOI, crs: str | CRS, buffer_m: float = 0):
+def buffered_aoi(aoi: AOI, crs: str | CRS, buffer_m: float = 0) -> Any:
     if not math.isfinite(buffer_m) or buffer_m < 0:
         raise ValueError("buffer_m must be finite and nonnegative")
     geometry = reproject_aoi(aoi, metric_crs(crs).to_wkt()).geometry
@@ -44,7 +45,7 @@ class GridSpec:
     height: int
     transform: Affine
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         object.__setattr__(self, "crs", metric_crs(self.crs))
         if not math.isfinite(self.resolution) or self.resolution <= 0:
             raise ValueError("resolution must be finite and positive")
@@ -59,7 +60,7 @@ class GridSpec:
         if tuple(self.bounds) != array_bounds(self.height, self.width, self.transform):
             raise ValueError("Grid bounds must agree exactly with its dimensions and transform")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "crs": self.crs.to_string(), "resolution": self.resolution,
             "bounds": list(self.bounds), "width": self.width, "height": self.height,
@@ -82,7 +83,7 @@ class DeliveryGrid(MetadataModel):
 
     @field_validator("spec", mode="before")
     @classmethod
-    def parse_spec(cls, value):
+    def parse_spec(cls, value: Any) -> GridSpec:
         if isinstance(value, GridSpec):
             return value
         if isinstance(value, dict):
@@ -93,7 +94,7 @@ class DeliveryGrid(MetadataModel):
         raise ValueError("spec must be a GridSpec or its serialized form")
 
     @field_serializer("spec")
-    def serialize_spec(self, value: GridSpec) -> dict:
+    def serialize_spec(self, value: GridSpec) -> dict[str, Any]:
         return value.to_dict()
 
     @field_validator("created_at")

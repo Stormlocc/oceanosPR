@@ -1,10 +1,14 @@
-"""Delivery-grid conformance and windowed normalization; no radiometric calibration or indices."""
+"""Delivery-grid conformance (P5): copy archived layers onto the grid, never resample.
+
+The Fase 5 resampling path (``normalize_band``/``build_grid``) was retired on 2026-09-16;
+what remains is the exact-equality contract: ``conform_layer`` copies, ``assert_aligned``
+proves it. No radiometric calibration and no scientific indices happen here.
+"""
 
 import math
 import os
 import tempfile
 import warnings
-from hashlib import sha256
 from pathlib import Path
 from typing import Literal
 
@@ -14,13 +18,13 @@ from rasterio.errors import NotGeoreferencedWarning
 from rasterio.windows import Window
 
 from oceanos.domain import (
-    ArtifactRef,
     ConformedLayer,
     FailureCode,
     LandMaskRef,
     LayerSource,
 )
 from oceanos.processing.grid import DeliveryGrid, GridSpec
+from oceanos.storage import GEOTIFF_MEDIA_TYPE, artifact_ref
 
 BLOCK_SIZE = 256
 # Sub-pixel tolerance for phase alignment of floating-point origins (one millionth of a pixel).
@@ -46,14 +50,6 @@ def assert_aligned(path: str | Path, grid: GridSpec) -> None:
             grid.crs, grid.transform, grid.width, grid.height, grid.bounds,
         ):
             raise NormalizationError(f"Raster is not exactly aligned to GridSpec: {path}")
-
-
-def _file_sha256(path: Path) -> str:
-    digest = sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _phase_offset(source_origin: float, grid_origin: float, resolution: float, label: str) -> int:
@@ -151,11 +147,7 @@ def conform_layer(
 
     return ConformedLayer(
         product_key=product_key, kind=kind,
-        raster=ArtifactRef(
-            role=product_key, relpath=destination.relative_to(tier_root).as_posix(),
-            sha256=_file_sha256(destination), size=destination.stat().st_size,
-            media_type="image/tiff; application=geotiff",
-        ),
+        raster=artifact_ref(destination, tier_root, product_key, GEOTIFF_MEDIA_TYPE),
         data_type="int32" if bitfield else "float32", nodata=None if bitfield else "nan",
         unit=unit, source=source, grid_id=grid.grid_id, method="copy",
         grid_coverage_fraction=coverage, land_mask=land_mask,

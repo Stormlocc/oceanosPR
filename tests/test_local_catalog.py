@@ -11,8 +11,10 @@ import pytest
 from jsonschema import Draft7Validator
 from pystac.validation.local_validator import get_local_schema_cache
 from referencing import Registry, Resource
+from shapely.affinity import translate
 
-from oceanos.aoi import load_aoi
+from oceanos.__main__ import main
+from oceanos.aoi import AOI, load_aoi
 from oceanos.catalog import (
     LocalCatalogError,
     LocalSceneCatalog,
@@ -194,9 +196,6 @@ def test_local_search_filters(tmp_path, scene):
     assert catalog.search_local_catalog(start_datetime=datetime(2025, 1, 1, tzinfo=UTC)) == []
     aoi = load_aoi(ROOT / "tests/fixtures/aoi.geojson", target_crs="EPSG:3857")
     assert len(catalog.search_local_catalog(aoi=aoi)) == 3
-    from shapely.affinity import translate
-
-    from oceanos.aoi import AOI
     moved = AOI("elsewhere", translate(aoi.geometry, xoff=1_000_000), aoi.crs)
     assert catalog.search_local_catalog(aoi=moved) == []
     with pytest.raises(ValueError):
@@ -229,7 +228,6 @@ def test_missing_item_file_is_error(tmp_path, scene):
 
 
 def test_cli_add_duplicate_and_list(tmp_path, scene, capsys):
-    from oceanos.__main__ import main
     input_file = tmp_path / "scenes.json"
     SceneSearchResult(scenes=[scene, scene]).save(input_file)
     directory = tmp_path / "catalog"
@@ -245,7 +243,6 @@ def test_cli_add_duplicate_and_list(tmp_path, scene, capsys):
 
 
 def test_cli_empty_and_invalid_input(tmp_path, capsys):
-    from oceanos.__main__ import main
     directory = tmp_path / "catalog"
     assert main(["catalog", "list", "--catalog-dir", str(directory)]) == 0
     assert "0 scenes found." in capsys.readouterr().out

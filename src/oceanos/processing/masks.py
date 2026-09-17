@@ -22,38 +22,30 @@ from shapely.ops import unary_union
 
 from oceanos.domain import (
     AnalysisMask,
-    ArtifactRef,
     BathymetrySource,
     CoastlineSource,
     LandMask,
 )
 from oceanos.processing.grid import DeliveryGrid
 from oceanos.processing.normalize import assert_aligned
+from oceanos.storage import GEOTIFF_MEDIA_TYPE, artifact_ref, file_sha256
 
 LAND_MASK_VERSION = "2"
 ANALYSIS_MASK_VERSION = "2"
 CUDEM_DATASET = "NOAA NCEI CUDEM 1/9 arc-second Puerto Rico"
 CUDEM_VERSION = "2022v2"
 LAND_DEFINITION = "elevation > 0 m (PRVD02), tile average on the delivery grid"
-MEDIA_GEOTIFF = "image/tiff; application=geotiff"
 
 
 class AnalysisMaskError(RuntimeError):
     """The analysis mask leaves too few pixels for a product; a user decision is required."""
 
 
-def _file_sha256(path: Path) -> str:
-    digest = sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def _tile_set_sha256(paths: list[Path]) -> str:
+    """One digest over the ordered (name, digest) pairs of a reference tile set."""
     digest = sha256()
     for path in sorted(paths, key=lambda item: item.name):
-        digest.update(f"{path.name}:{_file_sha256(path)}\n".encode())
+        digest.update(f"{path.name}:{file_sha256(path)}\n".encode())
     return digest.hexdigest()
 
 
@@ -107,7 +99,7 @@ def elevation_on_grid(bathymetry_paths: list[Path], grid: DeliveryGrid) -> np.nd
 def land_from_elevation(elevation: np.ndarray) -> np.ndarray:
     """Land where the grid-averaged elevation is above 0 m; unknown elevation is not land."""
     with np.errstate(invalid="ignore"):
-        return np.isfinite(elevation) & (elevation > 0)
+        return np.asarray(np.isfinite(elevation) & (elevation > 0))
 
 
 def coastal_buffer(land: np.ndarray, grid: DeliveryGrid, buffer_m: float) -> np.ndarray:
@@ -115,9 +107,14 @@ def coastal_buffer(land: np.ndarray, grid: DeliveryGrid, buffer_m: float) -> np.
     spec = grid.spec
     if not land.any():
         return np.zeros(land.shape, dtype=bool)
-    polygons = [shape(geometry) for geometry, value in shapes(land.astype("uint8"), mask=land, transform=spec.transform) if value == 1]
+    polygons = [
+        shape(geometry)
+        for geometry, value in shapes(land.astype("uint8"), mask=land, transform=spec.transform)
+        if value == 1
+    ]
     buffered = unary_union(polygons).buffer(buffer_m)
-    return geometry_mask([buffered.__geo_interface__], land.shape, spec.transform, invert=True) | land
+    within = geometry_mask([buffered.__geo_interface__], land.shape, spec.transform, invert=True)
+    return np.asarray(within | land)
 
 
 def land_mask_paths(grid_dir: Path) -> tuple[Path, Path]:
@@ -140,7 +137,7 @@ def load_land_mask(grid_dir: Path, grid: DeliveryGrid) -> LandMask | None:
     if (
         record.grid_id != grid.grid_id
         or record.version != LAND_MASK_VERSION
-        or _file_sha256(raster_path) != record.raster.sha256
+        or file_sha256(raster_path) != record.raster.sha256
     ):
         return None
     assert_aligned(raster_path, grid.spec)
@@ -159,8 +156,7 @@ def ensure_land_mask(grid_dir: Path, grid: DeliveryGrid, bathymetry_paths: list[
                        land_mask_version=LAND_MASK_VERSION, land_definition=LAND_DEFINITION)
     record = LandMask(
         grid_id=grid.grid_id, version=LAND_MASK_VERSION, coastline_source=_land_source(bathymetry_paths),
-        raster=ArtifactRef(role="land_mask", relpath=raster_path.name, sha256=_file_sha256(raster_path),
-                           size=raster_path.stat().st_size, media_type=MEDIA_GEOTIFF),
+        raster=artifact_ref(raster_path, grid_dir, "land_mask", GEOTIFF_MEDIA_TYPE),
         land_pixels=int(land.sum()),
     )
     _write_record(record_path, record)
@@ -200,8 +196,8 @@ def ensure_analysis_mask(
             candidate.grid_id == grid.grid_id and candidate.version == ANALYSIS_MASK_VERSION
             and candidate.coastal_buffer_m == coastal_buffer_m
             and candidate.shallow_exclusion_m == shallow_exclusion_m
-            and _file_sha256(buffer_path) == candidate.coastal_buffer.sha256
-            and _file_sha256(depth_path) == candidate.depth.sha256
+            and file_sha256(buffer_path) == candidate.coastal_buffer.sha256
+            and file_sha256(depth_path) == candidate.depth.sha256
         ):
             record = candidate
     if record is None:
@@ -217,10 +213,8 @@ def ensure_analysis_mask(
             bathymetry_source=BathymetrySource(
                 dataset=CUDEM_DATASET, version=CUDEM_VERSION, sha256=_tile_set_sha256(bathymetry_paths),
             ),
-            coastal_buffer=ArtifactRef(role="coastal_buffer", relpath=buffer_path.name, sha256=_file_sha256(buffer_path),
-                                       size=buffer_path.stat().st_size, media_type=MEDIA_GEOTIFF),
-            depth=ArtifactRef(role="depth", relpath=depth_path.name, sha256=_file_sha256(depth_path),
-                              size=depth_path.stat().st_size, media_type=MEDIA_GEOTIFF),
+            coastal_buffer=artifact_ref(buffer_path, grid_dir, "coastal_buffer", GEOTIFF_MEDIA_TYPE),
+            depth=artifact_ref(depth_path, grid_dir, "depth", GEOTIFF_MEDIA_TYPE),
             water_pixels=int((~buffer).sum()),
             analysis_pixels={key: int(product_analysis(buffer, depth, cut).sum()) for key, cut in shallow_exclusion_m.items()},
             shallow_exclusion_m=dict(shallow_exclusion_m),

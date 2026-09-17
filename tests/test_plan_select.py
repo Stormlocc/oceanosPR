@@ -31,10 +31,16 @@ from oceanos.processing.grid import DeliveryGrid, GridSpec
 def delivery_grid() -> DeliveryGrid:
     affine = Affine(10, 0, 500000, 0, -10, 100)
     spec = GridSpec(CRS.from_epsg(32619), 10, array_bounds(10, 10, affine), 10, 10, affine)
-    return DeliveryGrid(grid_id="grid-0123456789ab", aoi_id="aoi-test-0123456789ab", spec=spec, anchor=(0, 0), buffer_m=0, created_at=datetime.now(UTC))
+    return DeliveryGrid(
+        grid_id="grid-0123456789ab", aoi_id="aoi-test-0123456789ab", spec=spec,
+        anchor=(0, 0), buffer_m=0, created_at=datetime.now(UTC),
+    )
 
 
-def scene(tile: str, footprint, cloud: float = 10, *, platform: str = "S2A", datatake: str = "GS2A_20260702T150741_057594_N05.12", orbit: int = 82) -> SceneMetadata:
+def scene(
+    tile: str, footprint, cloud: float = 10, *, platform: str = "S2A",
+    datatake: str = "GS2A_20260702T150741_057594_N05.12", orbit: int = 82,
+) -> SceneMetadata:
     return SceneMetadata(
         scene_id=f"S2A_MSIL1C_20260702T150741_N0512_R082_T{tile}_X", collection="sentinel-2-l1c",
         platform=platform, datetime="2026-07-02T15:07:41Z", geometry=mapping(footprint), bbox=footprint.bounds,
@@ -92,9 +98,9 @@ def test_one_complete_tile_beats_any_multi_tile_set() -> None:
 
 def test_incomplete_or_mixed_overpass_is_rejected() -> None:
     _, west, east = footprints()
-    with pytest.raises(SelectionError, match="input.incomplete_tile_set"):
+    with pytest.raises(SelectionError, match=r"input\.incomplete_tile_set"):
         select_minimal_cover([scene("19QGA", west)], delivery_grid())
-    with pytest.raises(SelectionError, match="input.mixed_overpass"):
+    with pytest.raises(SelectionError, match=r"input\.mixed_overpass"):
         select_minimal_cover([scene("19QGA", west), scene("19QGB", east, platform="S2B")], delivery_grid())
 
 

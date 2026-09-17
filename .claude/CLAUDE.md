@@ -50,17 +50,20 @@ The project uses `uv`. Prefix commands with `uv run` unless the venv is active.
 uv sync                                                   # install deps from uv.lock
 uv run pytest -q                                          # full offline suite (must stay green every phase)
 uv run pytest tests/test_conform.py -q                    # one file
-uv run pytest tests/test_fetch.py::test_name -q           # one test
+uv run pytest tests/test_acquire.py::test_name -q          # one test
 uv run pytest --run-integration tests/integration -q      # opt-in live network tests
 uv run python -m oceanos aoi info --config configs/mvp.yaml   # CLI (argparse, src/oceanos/__main__.py)
+uv run ruff check src tests scripts                       # must stay clean
+uv run mypy src/oceanos/acolite src/oceanos/domain.py src/oceanos/pipeline src/oceanos/storage.py src/oceanos/timeseries
 ```
 
 - **Console script.** `oceanospr` works since PLAN Phase 0; `python -m oceanos` is equivalent.
 - **Tooling.** `ruff` and `mypy` are configured (Phase 0) and the `--run-acolite` opt-in golden
   test exists (Phase 2.2). There is still no CI.
 - **Offline hooks.** `tests/conftest.py` skips collecting `tests/integration` unless
-  `--run-integration` is given. Catalog, fetch and normalize tests block sockets with `no_network`
-  fixtures and fake HTTP with `httpx.MockTransport`.
+  `--run-integration` is given, and `tests/acolite_golden` unless `--run-acolite` is. Catalog,
+  fetch, conformance and mask tests block sockets with `no_network` fixtures and fake HTTP with
+  `httpx.MockTransport`; `FakeAcoliteRunner` substitutes the subprocess with Phase 1 fixtures.
 - **ACOLITE.** It is **not** a Python dependency. It is an external clone at `~/acolite`, run with
   the micromamba env `~/micromamba/envs/acolite` as
   `python launch_acolite.py --cli --settings=<file>`. The pin is tag `20260421.0`, commit
@@ -74,16 +77,24 @@ uv run python -m oceanos aoi info --config configs/mvp.yaml   # CLI (argparse, s
 > discovery path), `normalize_band` and `build_grid` no longer exist, and `catalog/` is no longer
 > versioned. Discovery is `CdseODataProvider`; conformance is `conform_layer`. See PLAN.md,
 > "Resolved after lock (legacy retirement pulled forward + study pause, 2026-09-16)".
+>
+> **Note (2026-09-17).** A full clean-up ran outside the phase sequence. GSHHG and the unused
+> `pyogrio`/`pandas` dependencies were retired (a Phase 7 item the user authorised early), seven
+> copies of the SHA-256 helper collapsed into `oceanos.storage`, ruff's rule set was widened, and
+> `docs/architecture.md` was rewritten. `mypy src` has no real type errors left, only missing
+> third-party stubs. See PLAN.md, "Resolved after lock (limpieza integral, 2026-09-17)".
 
-The pipeline today is **AOI → STAC discovery (Element84, L2A) → local STAC catalog → verified band
-download → spatial normalization**, and it stops there. `docs/architecture.md` (Spanish) and the
-README "Fase N" sections describe each stage.
+The pipeline today is **AOI → L1C discovery (CDSE OData) → whole-SAFE acquisition → pinned ACOLITE
+as a subprocess → delivery-grid conformance → quality verdict → immutable release**, and it stops
+before batch orchestration. `docs/architecture.md` (Spanish) is the current map; the README
+"Fase N" sections are the per-phase record.
 
 **The CLI is the only orchestrator.** `__main__.py` wires config → AOI → provider → catalog → stage.
 Each stage depends on the previous stage's **on-disk artifacts**, never on its code paths:
 
-- `fetch` requires a cataloged scene;
-- `normalize` requires a verified download manifest and re-checks every SHA-256.
+- `scenes acquire` requires a cataloged scene and a built grid;
+- `pipeline run-one` requires both, and re-verifies every SAFE SHA-256 at P1;
+- `pipeline republish` requires an archived attempt, and never touches the network or ACOLITE.
 
 No stage re-fetches or regenerates a missing upstream artifact; it errors instead.
 
@@ -105,6 +116,8 @@ House patterns every new stage must reuse:
   and makes no network calls.
 - **Single writer.** Enforced since Phase 2.2 by `WriterLock` (`storage.py`), held across P1-P8 of
   `pipeline run-one`, with stale-holder recovery.
+- **One hashing helper.** `oceanos.storage.file_sha256` / `artifact_ref` are the only ones; do not
+  add a local copy. `scripts/verify_release.py` is the single deliberate exception, and says why.
 
 ## Where the MVP takes the architecture
 
@@ -118,7 +131,8 @@ These are settled facts. Do not re-litigate them; the evidence is in `docs/topic
     the exit code.
   - `l2w_parameters` must be set explicitly, or no L2W file is written.
   - The resolved settings file is `acolite_run_<id>_l2r_settings.txt`.
-  - At the pin it never applies its GSHHG land mask, so OCEANOS applies the land mask.
+  - At the pin it never applies its own land mask, so OCEANOS applies one. Since the DA-1
+    amendment that mask is **CUDEM elevation > 0 m**; GSHHG was retired on 2026-09-17.
 - **OCEANOS role.** It owns everything around ACOLITE:
   - acquisition integrity, run verification, archive;
   - delivery-grid conformance (Fase 5 `GridSpec`/`assert_aligned` survive);
@@ -139,8 +153,9 @@ These are settled facts. Do not re-litigate them; the evidence is in `docs/topic
 - **Commits.** One commit per PLAN (sub-)phase, message `Fase N.M: <name>`, with the phase tag
   updated (`[TODO]` → `[DOING]` → `[DONE]`) in the same commit. Each phase also adds a Spanish
   "Fase N" section to `README.md`.
-- **Never commit** `.agents/` (Codex's project-local skills, deliberately untracked), `data/`, or
-  `.work/`.
+- **Never commit** `.agents/` (Codex's project-local skills, deliberately untracked), `data/`,
+  `.work/`, `catalog/`, `.superpowers/` or `.quarantine-*/`. All are anchored in `.gitignore`;
+  the root-level patterns carry a leading `/` so they cannot shadow a package of the same name.
 
 ## Context continuity
 

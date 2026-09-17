@@ -12,9 +12,8 @@ import rasterio.shutil
 
 from oceanos.domain import CogProfile
 
-CONTINUOUS_COG = CogProfile(predictor=3, overview_resampling="AVERAGE", data_type="float32")
-BITFIELD_COG = CogProfile(predictor=2, overview_resampling="MODE", data_type="int32")
-DISPLAY_COG = CogProfile(predictor=2, overview_resampling="AVERAGE", data_type="uint8")
+# Los perfiles concretos son configuración versionada (`configs/publication.yaml`,
+# `PublicationProfile`). Este módulo solo sabe aplicar un perfil, nunca elegirlo.
 
 
 def overview_count(width: int, height: int, blocksize: int) -> int:

@@ -110,7 +110,7 @@ def test_complete_pagination_and_cycle_guard() -> None:
 
 
 def test_non_l1c_response_aborts_the_whole_search() -> None:
-    with pytest.raises(SceneProviderError, match="input.not_l1c"):
+    with pytest.raises(SceneProviderError, match=r"input\.not_l1c"):
         provider(lambda _: httpx.Response(200, json={"value": [product(product_type="S2MSI2A")]})).search(
             load_aoi(ROOT / "tests/fixtures/aoi.geojson"), "2026-07-02", "2026-07-02"
         )

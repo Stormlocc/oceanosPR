@@ -1,4 +1,15 @@
-# OCEANOS Puerto Rico — Current State Assessment
+# OCEANOS Puerto Rico — Current State Assessment (frozen 2026-09-12)
+
+> **FROZEN. This is not the current state of the repository.**
+>
+> This is the pre-MVP assessment of the Fase 1-5 baseline, written to feed the PLAN. That baseline
+> was retired on 2026-09-16 and its code no longer exists. Every file listing, LOC count, test
+> count and open question below describes 2026-09-12.
+>
+> For the current state: `IMPLEMENTATION_HANDOFF.md` (state + next action), `PLAN.md` (phases and
+> acceptance criteria), `../../architecture.md` (architecture), `../../../README.md` (what runs).
+>
+> The eight open questions in §8 were all answered; their answers are the PLAN's Brief.
 
 > **Baseline note (2026-09-12):** work now proceeds on branch `master`, created fresh at `acc6072` and renamed over the previous one. The Fase 6 (`423e485`) and Fase 7 (`74160a8`) commits are **abandoned and unreachable from any ref** — deliberately left to be garbage-collected. References below to `master` holding Fase 6/7 describe the state before that change.
 

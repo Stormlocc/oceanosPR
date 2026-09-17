@@ -51,8 +51,12 @@ def test_usable_variant_publishes_all_eight_cog_products(tmp_path: Path, monkeyp
 
 
 def test_cloudy_variant_publishes_a_restricted_release(tmp_path: Path, monkeypatch) -> None:
-    """The Phase 1 ``cloudy/`` crop holds only l2_flags and turbidity, so it cannot yield the full product
-    set; its real cloud flags (cirrus over ~95 % of the window) replace the success run's flags at P5."""
+    """Publish a restricted release when the quality policy rejects the observation.
+
+    The Phase 1 ``cloudy/`` crop holds only l2_flags and turbidity, so it cannot yield the
+    full product set; its real cloud flags (cirrus over ~95 % of the window) replace the
+    success run's flags at P5.
+    """
     env = make_env(tmp_path, monkeypatch)
     cloudy_l2w = next((FIXTURES / "cloudy").glob("*_L2W.nc"))
     with warnings.catch_warnings():

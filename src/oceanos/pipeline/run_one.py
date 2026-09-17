@@ -7,7 +7,6 @@ import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from hashlib import sha256
 from pathlib import Path
 from typing import Literal
 
@@ -22,7 +21,7 @@ from oceanos.acolite.products import ancillary_type_for
 from oceanos.acolite.runner import ProcessOutcome
 from oceanos.acolite.settings import limit_for_grid
 from oceanos.aoi import load_aoi
-from oceanos.catalog import LocalSceneCatalog, SceneMetadata
+from oceanos.catalog import L1C_COLLECTION, LocalSceneCatalog, SceneMetadata
 from oceanos.config import OceanosSettings
 from oceanos.domain import (
     AcoliteInstallation,
@@ -45,6 +44,8 @@ from oceanos.domain import (
     StageResult,
     run_key,
 )
+from oceanos.ingestion import acquire_scene
+from oceanos.ingestion.cdse_auth import CdseTokenClient
 from oceanos.pipeline.archive import ArchiveStore, AttemptsLedger, recover_stale_attempt
 from oceanos.pipeline.downstream import (
     DownstreamInputs,
@@ -61,9 +62,8 @@ from oceanos.processing.grid import DeliveryGrid
 from oceanos.processing.quality import specular_angle_deg
 from oceanos.publishing import current_release_id, reconcile
 from oceanos.publishing.release import FaultHook
-from oceanos.storage import StorageLayout, WriterLock
+from oceanos.storage import StorageLayout, WriterLock, file_sha256
 
-L1C_COLLECTION = "sentinel-2-l1c"
 CONTRACT_VERSION = "1"
 # Brief assumption: final (reanalysis) ancillary data are used once a scene is this old.
 FINAL_ANCILLARY_AFTER = timedelta(days=50)
@@ -106,9 +106,6 @@ def _project_git_sha() -> str:
 
 def default_dependencies(settings: OceanosSettings, catalog: LocalSceneCatalog) -> RunOneDependencies:
     """Wire the real CDSE acquisition, installation probe and ACOLITE subprocess."""
-    from oceanos.ingestion import acquire_scene
-    from oceanos.ingestion.cdse_auth import CdseTokenClient
-
     token = CdseTokenClient(settings.scenes.identity_url)
     config = settings.acolite
 
@@ -124,8 +121,7 @@ def default_dependencies(settings: OceanosSettings, catalog: LocalSceneCatalog) 
         return InstallationProbe().probe(
             pin=AcolitePin(release_tag=config.release_tag, commit_sha=config.commit_sha),
             root=config.root, python_executable=config.python_executable, launcher=config.launcher,
-            luts_dir=config.luts_dir, external_dir=config.external_dir,
-            netrc_path=Path.home() / ".netrc", disk_path=settings.storage.work,
+            luts_dir=config.luts_dir, netrc_path=Path.home() / ".netrc", disk_path=settings.storage.work,
             required_disk_bytes=10 * 1024**3,
         )
 
@@ -145,14 +141,6 @@ def layout_for(settings: OceanosSettings) -> StorageLayout:
         raw=storage.raw, work=storage.work, archive=storage.archive, products=storage.products,
         superseded=storage.superseded, state=storage.state,
     )
-
-
-def _file_sha256(path: Path) -> str:
-    digest = sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _failure(code: FailureCode, stage: StageName, message: str, evidence: list[str] | None = None,
@@ -264,7 +252,7 @@ def run_one(
         inputs: list[Path] = []
         for scene in input_set.scenes:
             archive = layout.raw / scene.archive.relpath
-            if not archive.is_file() or _file_sha256(archive) != scene.archive.sha256:
+            if not archive.is_file() or file_sha256(archive) != scene.archive.sha256:
                 raise recorder.fail(StageName.PREFLIGHT, _failure(
                     FailureCode.CHECKSUM_MISMATCH, StageName.PREFLIGHT, "SAFE SHA-256 re-verification failed",
                     [scene.scene_id], retryable=True,

@@ -7,9 +7,10 @@ release inmutable con STAC derivado, con veredicto de calidad, máscaras de aná
 
 ## Estado del proyecto
 
-> **En pausa tras la Fase 3 (2026-09-16).** Las fases 0 a 3 del MVP ACOLITE están completas y
-> verificadas: 185 tests en verde, `ruff` limpio y `mypy` estricto limpio en `acolite`, `domain` y
-> `pipeline`. La **Fase 4** (índice, orquestación, retención y backfill acotado) no ha empezado.
+> **En pausa tras la Fase 3 (2026-09-16), con una limpieza integral el 2026-09-17.** Las fases 0 a 3
+> del MVP ACOLITE están completas y verificadas: 183 tests en verde, `ruff` limpio con un conjunto
+> de reglas ampliado, y `mypy` estricto limpio en `acolite`, `domain`, `pipeline`, `storage` y
+> `timeseries`. La **Fase 4** (índice, orquestación, retención y backfill acotado) no ha empezado.
 >
 > **Qué funciona hoy, de extremo a extremo:** `grid build` -> `scenes search` ->
 > `pipeline run-one --overpass <ID>` publica una observación completa, con veredicto de calidad y
@@ -105,9 +106,10 @@ retirados. El directorio local histórico `data/raw/sentinel2/`, si existe, qued
 ## Preparación y fixtures de ACOLITE
 
 ACOLITE queda fijado en la versión `20260421.0`, commit
-`f73cbe73887c2b114d9d3c70865effee73871525`, y se ejecutará como proceso externo. Los LUT se
-preparan previamente y GSHHG 2.3.7 se mantiene como dato de referencia propiedad de OCEANOS. Las
-credenciales de EarthData y CDSE permanecen exclusivamente en `~/.netrc`.
+`f73cbe73887c2b114d9d3c70865effee73871525`, y se ejecuta como proceso externo. Los LUT se preparan
+previamente y los tiles CUDEM son el único dato de referencia propiedad de OCEANOS (de ellos salen
+tanto la máscara de tierra como el corte por profundidad). Las credenciales de EarthData y CDSE
+permanecen exclusivamente en `~/.netrc`.
 
 Los puntos de entrada operacionales son scripts de Python; el repositorio no contiene bash.
 El pin (tag, commit y rutas) se lee de `configs/mvp.yaml`, nunca se redeclara en el script.
@@ -115,7 +117,7 @@ El pin (tag, commit y rutas) se lee de `configs/mvp.yaml`, nunca se redeclara en
 ```bash
 uv run python scripts/acolite_env.py --check          # solo lectura, no crea nada
 uv run python scripts/acolite_env.py --install        # clona el pin y descarga los LUT
-uv run python scripts/fetch_reference_data.py gshhg --check
+uv run python scripts/fetch_reference_data.py all --check
 ```
 
 Los fixtures offline verificados están en `tests/fixtures/acolite/`. No contienen SAFEs ni
@@ -123,7 +125,7 @@ credenciales. La suite predeterminada no requiere red ni una instalación de ACO
 
 ```bash
 uv run pytest -q
-uv run ruff check src tests
+uv run ruff check src tests scripts
 ```
 
 ## Fase 2.2: adaptador ACOLITE, verificación y archivo
@@ -131,7 +133,8 @@ uv run ruff check src tests
 `oceanos.acolite` ejecuta el ACOLITE fijado como subproceso y concentra todo su vocabulario:
 
 - `InstallationProbe` comprueba sin importar ACOLITE el commit, la línea `version=`, los LUT de
-  S2A/S2B/S2C, GSHHG, la entrada `earthdata` de `~/.netrc` y el disco libre.
+  S2A/S2B/S2C, la entrada `earthdata` de `~/.netrc` y el disco libre. *(El chequeo de GSHHG se
+  retiró el 2026-09-17; los tiles CUDEM los verifica `fetch_reference_data.py`.)*
 - `SettingsRenderer` escribe solo las claves propiedad de OCEANOS más `inputfile`, `output` y
   `runid`. El `limit` es la grilla de entrega en EPSG:4326 ampliada un píxel y debe coincidir con
   el del perfil; `merge_tiles` solo aparece con más de una tesela.
@@ -191,9 +194,13 @@ salvo con `--force-reprocess`, que crea un intento nuevo con el mismo `RunKey`.
   `grid.misaligned`; sin intersección falla con `grid.no_intersection`. Fuera de la extensión de
   ACOLITE los productos continuos quedan en NaN y `l2_flags` recibe el bit *out of scene* tomado del
   `FlagSpec`; se registra `grid_coverage_fraction`.
-- **Máscara de tierra (DA-1).** `processing/masks.py` rasteriza GSHHG una vez por grilla en
-  `products/<aoi>/grid/land_mask.tif` (centro de píxel en tierra) con su `land_mask.json`. Los
-  productos de agua quedan NaN en tierra; `l2_flags` nunca se enmascara.
+- **Máscara de tierra (DA-1).** `processing/masks.py` construye la máscara una vez por grilla en
+  `products/<aoi>/grid/land_mask.tif`, con su `land_mask.json`. Los productos de agua quedan NaN en
+  tierra; `l2_flags` nunca se enmascara.
+  *Nota (enmienda DA-1, 2026-09-15):* en la Fase 2.3 la fuente era GSHHG. La revisión DA-6 midió que
+  GSHHG está desplazada ≈ 380 m al sur y ≈ 150 m al oeste sobre La Parguera, así que la máscara pasó
+  a derivarse de la **elevación CUDEM > 0 m** (ver la sección de la Fase 3). GSHHG se retiró del
+  repositorio el 2026-09-17.
 - **Publicación.** Los COG continuos usan `DEFLATE` + `PREDICTOR=3` y overviews `AVERAGE`; `l2_flags`
   usa `PREDICTOR=2` y overviews `MODE`. Siempre hay al menos una overview. La release
   `products/<aoi>/releases/<overpass>/<release_id>/` contiene `tur_nechad2016.tif`, `l2_flags.tif`,
@@ -264,4 +271,47 @@ La prueba del catálogo CDSE real es opt-in:
 
 ```bash
 uv run pytest --run-integration -q tests/integration/test_cdse_live.py
+```
+
+## Limpieza integral (2026-09-17, fuera de la secuencia de fases)
+
+A pedido del usuario se limpió el repositorio por completo. **No movió ninguna etapa, valor fijado
+ni criterio de aceptación**; la Fase 4 sigue siendo la próxima unidad. El registro completo, con la
+evidencia de que cada cosa estaba muerta, está en `PLAN.md`, "Resolved after lock (limpieza
+integral, 2026-09-17)".
+
+**Qué se retiró.** GSHHG, que quedó sin uso cuando la enmienda DA-1 pasó la máscara de tierra a
+CUDEM: su código de fallo, el campo `gshhg_present`, el chequeo del probe, su dataset en
+`fetch_reference_data.py` y la dependencia `pyogrio` que existía solo para leer su shapefile (con
+ella se fue `pandas`, que nadie importaba). Era un ítem de la Fase 7 y el usuario autorizó
+adelantarlo. También se fueron `record_materialization`, la constante `EXCLUDING_FLAGS`, los tres
+`CogProfile` de módulo que duplicaban `configs/publication.yaml`, un ejemplo L2A sintético y los
+placeholders `.gitignore` de los tiers.
+
+**Qué se conservó a propósito.** `tests/fixtures/acolite/gshhg_clip.geojson` y los conteos de
+`window.json` son el registro congelado de **cómo se eligió la ventana de fixtures** en la Fase 1,
+bajo la fuente de costa vigente entonces. Son procedencia, no comportamiento; los docstrings del
+test y del generador ahora lo dicen.
+
+**Qué se deduplicó.** El mismo bucle SHA-256 estaba en siete lugares; `topology.md` ya asignaba el
+hasheo de `ArtifactRef` a `oceanos.storage`, así que `file_sha256` y `artifact_ref` viven ahí.
+`scripts/verify_release.py` mantiene su copia **a propósito**: un verificador de releases no debe
+confiar en la librería que las escribió. También se unificaron `L1C_COLLECTION`, `layout_for`, el
+orden de bandas MSI, los media types y `MetadataModel`.
+
+**Qué se endureció.** `ruff` pasó de las reglas por defecto (`E4/E7/E9/F`) a
+`B, C4, D, E, F, I, N, PLC, PLE, PLW, RUF, SIM, UP, W` con `line-length = 140`, y cada `ignore`
+lleva su motivo. `mypy src` bajó de 56 a 22 errores y **los 22 son stubs de terceros que faltan**
+(`rasterio`, `shapely`, `yaml`): no queda ningún error de tipos real. Se corrigió además un bug del
+`.gitignore`: el patrón `catalog/` sin barra inicial también ignoraba `src/oceanos/catalog/`.
+
+**Pendiente de decisión antes de la Fase 6.** Esa fase y la decisión D-5 especifican un GeoJSON de
+costa **derivado de GSHHG** como contexto del visor. GSHHG ya no se descarga. La sustitución
+recomendada es el contorno de 0 m de los tiles CUDEM fijados, que ya es el borde de la propia
+máscara de tierra y no añade dependencias. Queda anotado en el PLAN, sin decidir.
+
+```bash
+uv run pytest -q                                          # 183 en verde
+uv run ruff check src tests scripts                        # limpio
+uv run mypy src/oceanos/acolite src/oceanos/domain.py src/oceanos/pipeline src/oceanos/storage.py src/oceanos/timeseries
 ```

@@ -2,8 +2,14 @@
 """Trim the pinned real ACOLITE runs into the committed Phase 1 fixtures.
 
 Run this with the ACOLITE micromamba interpreter.  The only non-stdlib Python
-dependency is netCDF4; the environment's ``ogr2ogr`` executable clips GSHHG.
-There is deliberately no import of ACOLITE itself.
+dependency is netCDF4; the environment's ``ogr2ogr`` executable clips the
+coastline.  There is deliberately no import of ACOLITE itself.
+
+GSHHG note: the ``gshhg_clip.geojson`` this writes is the **frozen Phase 1 record**
+of how the fixture window was chosen, under the coastline source in force then.
+The pipeline's land mask moved to CUDEM with the DA-1 amendment and GSHHG was
+retired from production (PLAN, 2026-09-17), so the clip is provenance, not
+behaviour: regenerating it needs a GSHHG archive supplied by hand via ``--gshhg``.
 """
 
 from __future__ import annotations
@@ -120,7 +126,9 @@ def _crop_netcdf(
     include_variables: frozenset[str] | None = None,
     include_prefixes: tuple[str, ...] = (),
 ) -> dict[str, Any]:
-    from netCDF4 import Dataset  # type: ignore[import-not-found]
+    # Deferred on purpose: the offline suite imports this module without netCDF4,
+    # which only exists in the ACOLITE interpreter this script runs under.
+    from netCDF4 import Dataset  # noqa: PLC0415  # type: ignore[import-not-found]
 
     with Dataset(source_path) as source:
         if row < 0 or column < 0 or row + size > len(source.dimensions["y"]) or column + size > len(source.dimensions["x"]):

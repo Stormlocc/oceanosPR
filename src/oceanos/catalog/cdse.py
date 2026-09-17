@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import time as clock
 from contextlib import nullcontext
 from datetime import UTC, date, datetime, time
@@ -20,6 +21,9 @@ from oceanos.catalog.provider import SceneProvider, SceneProviderError
 
 TRANSIENT_HTTP_STATUS = {408, 429, 500, 502, 503, 504}
 L1C_COLLECTION = "sentinel-2-l1c"
+_PRODUCT_GROUP = re.compile(r"G(S2[ABC])_(\d{8}T\d{6})_\d+_N\d{2}\.\d{2}")
+_BACKOFF_SECONDS = 0.5
+_MAX_RETRY_DELAY_SECONDS = 30.0
 
 
 def _datetime(value: datetime | str, *, end: bool = False) -> datetime:
@@ -41,6 +45,7 @@ def _odata_time(value: datetime) -> str:
 
 def _retry_delay(response: httpx.Response | None, attempt: int) -> float:
     if response is not None and "Retry-After" in response.headers:
+        delay: float
         try:
             header = response.headers["Retry-After"]
             delay = float(header)
@@ -48,9 +53,9 @@ def _retry_delay(response: httpx.Response | None, attempt: int) -> float:
             try:
                 delay = (parsedate_to_datetime(header) - datetime.now(UTC)).total_seconds()
             except (TypeError, ValueError, OverflowError):
-                delay = 0.5 * (2**attempt)
-        return max(0, min(delay, 30))
-    return 0.5 * (2**attempt)
+                delay = _BACKOFF_SECONDS * 2.0**attempt
+        return max(0.0, min(delay, _MAX_RETRY_DELAY_SECONDS))
+    return _BACKOFF_SECONDS * 2.0**attempt
 
 
 class CdseODataProvider(SceneProvider):
@@ -113,11 +118,11 @@ class CdseODataProvider(SceneProvider):
             f"OData.CSC.Intersects(area=geography'SRID=4326;{footprint.wkt}')",
             f"ContentDate/Start ge {_odata_time(start)}", f"ContentDate/Start le {_odata_time(end)}",
         ]
-        params = {
+        params: dict[str, str] | None = {
             "$filter": " and ".join(filters), "$expand": "Attributes",
             "$orderby": "ContentDate/Start", "$top": str(self.page_size),
         }
-        url = f"{self.catalogue_url}/Products"
+        url: str | None = f"{self.catalogue_url}/Products"
         scenes: dict[str, SceneMetadata] = {}
         visited: set[str] = set()
         context = nullcontext(self.client) if self.client is not None else httpx.Client()
@@ -166,7 +171,7 @@ class CdseODataProvider(SceneProvider):
         try:
             if not isinstance(record, dict):
                 raise TypeError("product must be an object")
-            attributes = {
+            attributes: dict[str, Any] = {
                 attribute["Name"]: attribute.get("Value")
                 for attribute in record["Attributes"] if isinstance(attribute, dict) and "Name" in attribute
             }
@@ -177,10 +182,10 @@ class CdseODataProvider(SceneProvider):
             if not isinstance(name, str) or not name.endswith(".SAFE"):
                 raise ValueError("Name must end in .SAFE")
             platform_value = attributes.get("platformSerialIdentifier")
-            platform = platform_value if platform_value in {"S2A", "S2B", "S2C"} else f"S2{platform_value}"
+            platform: str = platform_value if platform_value in {"S2A", "S2B", "S2C"} else f"S2{platform_value}"
             relative_orbit = int(attributes["relativeOrbitNumber"])
             datatake = str(attributes["productGroupId"])
-            match = __import__("re").fullmatch(r"G(S2[ABC])_(\d{8}T\d{6})_\d+_N\d{2}\.\d{2}", datatake)
+            match = _PRODUCT_GROUP.fullmatch(datatake)
             if match is None or match.group(1) != platform:
                 raise ValueError("productGroupId does not match the platform")
             overpass_id = f"{platform}_{match.group(2)}_R{relative_orbit:03d}"

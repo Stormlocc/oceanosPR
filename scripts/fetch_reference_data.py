@@ -1,6 +1,6 @@
 """Download and verify the OCEANOS-owned reference datasets.
 
-    uv run python scripts/fetch_reference_data.py [gshhg | bathymetry | all] [--check]
+    uv run python scripts/fetch_reference_data.py [bathymetry | all] [--check]
 
 Every file is pinned here by size and SHA-256. Neither value is ever computed
 from a downloaded file and written back: a mismatch is a failure (B12). The
@@ -12,17 +12,15 @@ Destination: ``acolite.external_dir`` from the OCEANOS configuration.
 from __future__ import annotations
 
 import argparse
-import shutil
 import sys
-import zipfile
 from collections.abc import Sequence
-from dataclasses import dataclass, field
-from hashlib import sha256
+from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
 
 from oceanos.config import ConfigurationError, load_config
+from oceanos.storage import file_sha256
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = REPO_ROOT / "configs/mvp.yaml"
@@ -42,32 +40,18 @@ class PinnedFile:
 
 @dataclass(frozen=True)
 class Dataset:
-    """A reference dataset: its files, and the archive members it unpacks."""
+    """A reference dataset: one directory under ``external_dir`` and its pinned files."""
 
     directory: str
     files: tuple[PinnedFile, ...]
-    members: tuple[str, ...] = field(default=())
 
 
-_GSHHG_URL = "https://www.soest.hawaii.edu/pwessel/gshhg/gshhg-shp-2.3.7.zip"
 _CUDEM_URL = "https://noaa-nos-coastal-lidar-pds.s3.amazonaws.com/dem/NCEI_ninth_Topobathy_PuertoRico_9525"
 
 DATASETS: dict[str, Dataset] = {
-    # GSHHG 2.3.7 full resolution, level 1 land polygons. OCEANOS applies the
-    # land mask itself; the pin never applies its own (DA-1).
-    "gshhg": Dataset(
-        directory="gshhg",
-        files=(
-            PinnedFile(
-                url=_GSHHG_URL,
-                name="gshhg-shp-2.3.7.zip",
-                size=149157845,
-                sha256="8dbbe7e071e77e9e75f2d639239099ebca8d5c16d6a07df8169729d49f15cf41",
-            ),
-        ),
-        members=tuple(f"GSHHS_shp/f/GSHHS_f_L1.{suffix}" for suffix in ("shp", "shx", "dbf", "prj")),
-    ),
     # NOAA NCEI CUDEM 1/9", Puerto Rico 2022v2, NAD83 + PRVD02 metres positive up.
+    # Single source of both the land mask (elevation > 0 m) and the depth cut,
+    # since the DA-1 amendment retired GSHHG.
     "bathymetry": Dataset(
         directory="bathymetry/cudem",
         files=(
@@ -104,15 +88,6 @@ class CheckError(RuntimeError):
     """A reference file is missing or does not match its pinned identity."""
 
 
-def digest_of(path: Path) -> str:
-    """Return the SHA-256 of a file, read in bounded blocks."""
-    digest = sha256()
-    with path.open("rb") as stream:
-        for block in iter(lambda: stream.read(CHUNK_BYTES), b""):
-            digest.update(block)
-    return digest.hexdigest()
-
-
 def verify(path: Path, pinned: PinnedFile) -> None:
     """Accept a file only at its pinned size and digest."""
     if not path.is_file():
@@ -120,7 +95,7 @@ def verify(path: Path, pinned: PinnedFile) -> None:
     size = path.stat().st_size
     if size != pinned.size:
         raise CheckError(f"{path} has {size} bytes, expected {pinned.size}")
-    if digest_of(path) != pinned.sha256:
+    if file_sha256(path) != pinned.sha256:
         raise CheckError(f"{path} does not match the pinned SHA-256")
 
 
@@ -143,46 +118,20 @@ def download(pinned: PinnedFile, target: Path) -> None:
     partial.replace(target)
 
 
-def extract(archive: Path, members: Sequence[str], directory: Path) -> None:
-    """Unpack the named members through a staging directory, then move them into place."""
-    staging = directory / ".extract"
-    shutil.rmtree(staging, ignore_errors=True)
-    try:
-        with zipfile.ZipFile(archive) as source:
-            broken = source.testzip()
-            if broken is not None:
-                raise CheckError(f"CRC failure in {archive}: {broken}")
-            missing = sorted(set(members) - set(source.namelist()))
-            if missing:
-                raise CheckError(f"{archive} lacks required members: {', '.join(missing)}")
-            source.extractall(staging, members=list(members))
-        for member in members:
-            target = directory / member
-            target.parent.mkdir(parents=True, exist_ok=True)
-            (staging / member).replace(target)
-    finally:
-        shutil.rmtree(staging, ignore_errors=True)
-
-
 def check(dataset: Dataset, directory: Path) -> None:
-    """Verify every pinned file and every unpacked member."""
+    """Verify every pinned file of one dataset."""
     for pinned in dataset.files:
         verify(directory / pinned.name, pinned)
-    for member in dataset.members:
-        if not (directory / member).is_file():
-            raise CheckError(f"reference data is missing: {directory / member}")
 
 
 def fetch(dataset: Dataset, directory: Path) -> None:
-    """Download what is absent, verify everything, and unpack the archive members."""
+    """Download what is absent, then verify everything."""
     directory.mkdir(parents=True, exist_ok=True)
     for pinned in dataset.files:
         target = directory / pinned.name
         if not target.is_file():
             download(pinned, target)
         verify(target, pinned)
-    if dataset.members and not all((directory / member).is_file() for member in dataset.members):
-        extract(directory / dataset.files[0].name, dataset.members, directory)
     check(dataset, directory)
 
 
@@ -206,7 +155,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             else:
                 fetch(dataset, directory)
                 print(f"{name}: reference data is ready at {directory}")
-    except (CheckError, ConfigurationError, OSError, zipfile.BadZipFile) as exc:
+    except (CheckError, ConfigurationError, OSError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
     return 0

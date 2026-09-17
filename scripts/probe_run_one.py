@@ -6,7 +6,7 @@ Prerequisites, each verified before anything runs:
   - the project environment (``uv sync``);
   - the pinned ACOLITE installation, its LUTs and ``~/.netrc``
     (``scripts/acolite_env.py --check``);
-  - the OCEANOS reference data, GSHHG and CUDEM
+  - the OCEANOS-owned CUDEM reference tiles
     (``scripts/fetch_reference_data.py --check``);
   - ``.work/oceanos-pr-mvp/spikes/scenes.json`` from Phase 1, for the scene to run;
   - network access to CDSE (discovery and a ~800 MB SAFE) and to EarthData ancillary;

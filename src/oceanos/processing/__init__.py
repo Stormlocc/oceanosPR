@@ -1,4 +1,4 @@
-"""Delivery grid, conformance and masks, without scientific index calculation."""
+"""Delivery grid, conformance, masks and the pure quality core; no index calculation."""
 
 from oceanos.processing.grid import DeliveryGrid, GridSpec, build_delivery_grid
 from oceanos.processing.normalize import (

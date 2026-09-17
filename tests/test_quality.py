@@ -100,7 +100,10 @@ def test_each_observation_gate_fails_on_its_condition(kwargs, reason) -> None:
     report = assess(_inputs(**kwargs))
     assert report.verdict is UsabilityVerdict.UNUSABLE
     assert report.reasons == (reason,)
-    expected = ObservationStatus.INCOMPLETE_COVERAGE if reason == quality.REASON_INCOMPLETE_COVERAGE else ObservationStatus.NO_USABLE_OBSERVATION
+    expected = (
+        ObservationStatus.INCOMPLETE_COVERAGE if reason == quality.REASON_INCOMPLETE_COVERAGE
+        else ObservationStatus.NO_USABLE_OBSERVATION
+    )
     assert report.status is expected
 
 

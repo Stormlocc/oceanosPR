@@ -33,8 +33,8 @@ def load_config(config_path: str | Path, *, base_dir: str | Path | None = None) 
 
     Raises:
         ConfigurationError: If the file is absent, malformed, or invalid.
-    """
 
+    """
     path = Path(config_path).expanduser().resolve()
     if not path.is_file():
         raise ConfigurationError(f"Configuration file does not exist: {path}")

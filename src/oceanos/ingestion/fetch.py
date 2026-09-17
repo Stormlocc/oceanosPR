@@ -19,12 +19,13 @@ import httpx
 from pydantic import Field
 
 from oceanos.catalog.local import LocalSceneCatalog
-from oceanos.catalog.models import MetadataModel, SceneMetadata
-from oceanos.domain import AcquiredScene, ArtifactRef, FailureCode
-from oceanos.storage import StorageLayout
+from oceanos.catalog.models import SceneMetadata
+from oceanos.domain import AcquiredScene, ArtifactRef, FailureCode, MetadataModel
+from oceanos.storage import file_sha256, raw_scene_dir
 
 CHUNK_SIZE = 1024 * 1024
 SAFE_BANDS = frozenset({"B01", "B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B09", "B10", "B11", "B12"})
+_JP2_BAND = re.compile(r"_B(0[1-9]|1[0-2]|8A)\.jp2$", re.IGNORECASE)
 
 
 class AcquisitionError(RuntimeError):
@@ -46,12 +47,14 @@ class SceneManifest(MetadataModel):
     provider_blake3: str | None = None
 
 
-def _validate_safe(path: Path) -> None:
-    try:
-        with zipfile.ZipFile(path) as archive:
-            names = [name.rstrip("/") for name in archive.namelist() if not name.endswith("/")]
-    except (OSError, zipfile.BadZipFile) as exc:
-        raise AcquisitionError(FailureCode.SAFE_MEMBERS_MISSING, "product is not a readable ZIP") from exc
+def _band_of(name: str) -> str | None:
+    """Return the MSI band a JP2 image member carries, or None if it is not one."""
+    match = _JP2_BAND.search(name)
+    return f"B{match.group(1).upper()}" if match is not None else None
+
+
+def _is_complete_safe(names: list[str]) -> bool:
+    """Whether a ZIP member listing is one complete, single-granule L1C SAFE."""
     roots = {name.split("/", 1)[0] for name in names if "/" in name}
     root_metadata = [name for name in names if name.count("/") == 1 and name.endswith("/MTD_MSIL1C.xml")]
     granules = {
@@ -59,21 +62,29 @@ def _validate_safe(path: Path) -> None:
         for name in names
         if len(parts := name.split("/")) >= 4 and parts[1] == "GRANULE"
     }
-    valid = len(roots) == 1 and len(root_metadata) == 1 and len(granules) == 1
-    if valid:
-        root = next(iter(roots))
-        granule = next(iter(granules))
-        prefix = f"{root}/GRANULE/{granule}/"
-        tile_metadata = f"{prefix}MTD_TL.xml" in names
-        image_bands = set()
-        for name in names:
-            if name.startswith(f"{prefix}IMG_DATA/") and name.lower().endswith(".jp2"):
-                match = re.search(r"_B(0[1-9]|1[0-2]|8A)\.jp2$", name, re.IGNORECASE)
-                if match is not None:
-                        image_bands.add(f"B{match.group(1).upper()}")
-        detector_masks = [name for name in names if name.startswith(f"{prefix}QI_DATA/MSK_DETFOO")]
-        valid = tile_metadata and image_bands == SAFE_BANDS and bool(detector_masks)
-    if not valid:
+    if len(roots) != 1 or len(root_metadata) != 1 or len(granules) != 1:
+        return False
+    prefix = f"{next(iter(roots))}/GRANULE/{next(iter(granules))}/"
+    image_bands = {
+        band
+        for name in names
+        if name.startswith(f"{prefix}IMG_DATA/") and (band := _band_of(name)) is not None
+    }
+    return (
+        f"{prefix}MTD_TL.xml" in names
+        and image_bands == SAFE_BANDS
+        and any(name.startswith(f"{prefix}QI_DATA/MSK_DETFOO") for name in names)
+    )
+
+
+def _validate_safe(path: Path) -> None:
+    """Inspect the ZIP listing without extracting; a partial SAFE is a hard failure."""
+    try:
+        with zipfile.ZipFile(path) as archive:
+            names = [name.rstrip("/") for name in archive.namelist() if not name.endswith("/")]
+    except (OSError, zipfile.BadZipFile) as exc:
+        raise AcquisitionError(FailureCode.SAFE_MEMBERS_MISSING, "product is not a readable ZIP") from exc
+    if not _is_complete_safe(names):
         raise AcquisitionError(
             FailureCode.SAFE_MEMBERS_MISSING,
             "SAFE must contain one granule, root/tile metadata, all 13 JP2 bands, and detector masks",
@@ -98,20 +109,12 @@ def _atomic_json(model: MetadataModel, path: Path) -> None:
             temporary.unlink()
 
 
-def _file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(CHUNK_SIZE), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def _existing_manifest(path: Path, archive: Path, expected_sha256: str | None) -> SceneManifest | None:
     if not path.exists() or not archive.exists():
         return None
     try:
         manifest = SceneManifest.model_validate_json(path.read_text(encoding="utf-8"))
-        digest = _file_sha256(archive)
+        digest = file_sha256(archive)
     except (OSError, ValueError):
         return None
     wanted = expected_sha256 or manifest.acquired.archive.sha256
@@ -169,15 +172,13 @@ def acquire_scene(
     if asset.file_size is None or asset.file_size <= 0:
         raise AcquisitionError(FailureCode.SAFE_MEMBERS_MISSING, "catalogue ContentLength is required")
     raw_path = Path(raw_root).expanduser().resolve()
-    layout = StorageLayout.from_data_root(raw_path.parent)
-    layout.raw = raw_path
-    directory = layout.raw_scene_dir(scene.scene_id)
+    directory = raw_scene_dir(raw_path, scene.scene_id)
     directory.mkdir(parents=True, exist_ok=True)
     archive = directory / f"{scene.scene_id}.zip"
     manifest_path = directory / "manifest.json"
     existing = _existing_manifest(manifest_path, archive, expected_sha256)
     if existing is not None:
-        _sync_catalog(catalog, scene, existing, layout.raw, manifest_path)
+        _sync_catalog(catalog, scene, existing, raw_path, manifest_path)
         return existing
     temporary = archive.with_suffix(".zip.part")
     context = nullcontext(client) if client is not None else httpx.Client()
@@ -196,7 +197,10 @@ def acquire_scene(
                         timeout=timeout,
                     ) as response:
                         if response.status_code != 200 or "Content-Range" in response.headers:
-                            raise AcquisitionError(FailureCode.INTERNAL_UNEXPECTED, f"full transfer requires HTTP 200, got {response.status_code}")
+                            raise AcquisitionError(
+                                FailureCode.INTERNAL_UNEXPECTED,
+                                f"full transfer requires HTTP 200, got {response.status_code}",
+                            )
                         header = response.headers.get("Content-Length")
                         if header is None or int(header) != asset.file_size:
                             raise AcquisitionError(FailureCode.INTERNAL_UNEXPECTED, "Content-Length differs from catalogue ContentLength")
@@ -217,7 +221,7 @@ def acquire_scene(
                         raise AcquisitionError(FailureCode.REFETCH_MISMATCH, "re-fetched SAFE differs from recorded SHA-256")
                     _validate_safe(temporary)
                     os.replace(temporary, archive)
-                    relative = archive.relative_to(layout.raw).as_posix()
+                    relative = archive.relative_to(raw_path).as_posix()
                     acquired = AcquiredScene(
                         scene_id=scene.scene_id, source_id=scene.source_id,
                         archive=ArtifactRef(
@@ -232,7 +236,7 @@ def acquire_scene(
                         acquired=acquired, provider_blake3=scene.checksums.blake3,
                     )
                     _atomic_json(manifest, manifest_path)
-                    _sync_catalog(catalog, scene, manifest, layout.raw, manifest_path)
+                    _sync_catalog(catalog, scene, manifest, raw_path, manifest_path)
                     return manifest
                 except AcquisitionError as exc:
                     last_error = exc

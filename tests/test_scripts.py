@@ -3,7 +3,6 @@
 import ast
 import importlib.util
 import sys
-import zipfile
 from pathlib import Path
 from types import ModuleType
 
@@ -148,9 +147,9 @@ def test_reference_check_reports_missing_owned_data(
     module = _load_script("fetch_reference_data")
     monkeypatch.setenv("OCEANOS_ACOLITE__EXTERNAL_DIR", str(tmp_path))
 
-    assert module.main(["gshhg", "--check"]) == 1
+    assert module.main(["bathymetry", "--check"]) == 1
 
-    assert "gshhg" in capsys.readouterr().err
+    assert "ncei19_" in capsys.readouterr().err
 
 
 def test_reference_verify_rejects_wrong_size_and_wrong_digest(tmp_path: Path) -> None:
@@ -164,21 +163,6 @@ def test_reference_verify_rejects_wrong_size_and_wrong_digest(tmp_path: Path) ->
         module.verify(path, module.PinnedFile(url="https://x/y", name="sample.bin", size=6, sha256=digest))
     with pytest.raises(module.CheckError, match="SHA-256"):
         module.verify(path, module.PinnedFile(url="https://x/y", name="sample.bin", size=7, sha256=digest))
-
-
-def test_reference_extraction_keeps_only_the_required_members(tmp_path: Path) -> None:
-    """Extraction is staged, and leaves no scratch directory behind."""
-    module = _load_script("fetch_reference_data")
-    archive = tmp_path / "source.zip"
-    with zipfile.ZipFile(archive, "w") as target:
-        target.writestr("GSHHS_shp/f/GSHHS_f_L1.shp", "polygons")
-        target.writestr("GSHHS_shp/c/GSHHS_c_L1.shp", "coarse")
-
-    module.extract(archive, ("GSHHS_shp/f/GSHHS_f_L1.shp",), tmp_path)
-
-    assert (tmp_path / "GSHHS_shp/f/GSHHS_f_L1.shp").read_text(encoding="utf-8") == "polygons"
-    assert not (tmp_path / "GSHHS_shp/c").exists()
-    assert [path.name for path in tmp_path.iterdir() if path.name.startswith(".")] == []
 
 
 # --- scripts/probe_run_one.py ----------------------------------------------

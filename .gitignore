@@ -7,13 +7,28 @@ wheels/
 *.egg-info
 
 # Virtual environments
-.venv
+/.venv
+
+# Cachés de herramientas
+/.mypy_cache/
+/.pytest_cache/
+/.ruff_cache/
 
 # Skills locales de Codex — nunca se versionan (regla del PLAN)
-.agents/
+/.agents/
 
-# Catalogo STAC local: estado generado por `scenes search`, no se versiona
-catalog/
+# Tiers de ejecución: cada etapa los crea sola. El layout está en
+# docs/topics/oceanos-pr-mvp/design/topology.md §2.1, no en placeholders.
+/data/
+/.work/
 
-# Worktrees temporales de Claude Code
-.claude/worktrees/
+# Catálogo STAC local: estado generado por `scenes search`, no se versiona.
+# Anclado a la raíz: sin la barra inicial también ignoraría src/oceanos/catalog/.
+/catalog/
+
+# Andamiaje de sesión de agentes
+/.claude/worktrees/
+/.superpowers/
+
+# Cuarentena de limpieza (borrable tras validar)
+/.quarantine-*/

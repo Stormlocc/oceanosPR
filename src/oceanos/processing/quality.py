@@ -27,7 +27,6 @@ from oceanos.domain import (
 
 # Flag names (FlagBit.name) that exclude a pixel; bit positions always come from the run's FlagSpec.
 CLOUD_FLAGS = ("cirrus", "high_toa")
-EXCLUDING_FLAGS = ("cirrus", "high_toa", "negative_surface_reflectance")
 NEGATIVE_REFLECTANCE_FLAG = "negative_surface_reflectance"
 OUT_OF_SCENE_FLAG = "out_of_scene"
 

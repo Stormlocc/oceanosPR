@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import ClassVar, Literal
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic_settings import (
@@ -67,8 +68,6 @@ class SceneSearchSettings(BaseModel):
     @field_validator("catalogue_url", "download_url", "identity_url")
     @classmethod
     def http_root(cls, value: str) -> str:
-        from urllib.parse import urlsplit
-
         parsed = urlsplit(value)
         if parsed.scheme not in ("http", "https") or not parsed.netloc or parsed.query or parsed.fragment:
             raise ValueError("endpoint must be an HTTP(S) root URL without query or fragment")
@@ -139,7 +138,6 @@ class OceanosSettings(BaseSettings):
     @classmethod
     def reject_blank_values(cls, value: str) -> str:
         """Reject blank identifiers that would make provenance ambiguous."""
-
         normalized = value.strip()
         if not normalized:
             raise ValueError("value must not be blank")
@@ -155,17 +153,11 @@ class OceanosSettings(BaseSettings):
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
         """Give explicit environment variables precedence over YAML values."""
-
         del settings_cls
         return env_settings, init_settings, dotenv_settings, file_secret_settings
 
     def resolve_paths(self, base_dir: Path) -> OceanosSettings:
-        """Return a copy whose paths are absolute and normalized.
-
-        Args:
-            base_dir: Base for a relative ``data_root``.
-        """
-
+        """Return a copy whose paths are absolute and normalized against ``base_dir``."""
         resolved_base = base_dir.expanduser().resolve()
         data_root = self._resolve(self.data_root, resolved_base)
         return self.model_copy(

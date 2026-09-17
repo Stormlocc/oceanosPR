@@ -29,7 +29,6 @@ from oceanos.domain import (
     AcoliteProfile,
     AcoliteRunOutputs,
     AnalysisMaskRef,
-    ArtifactRef,
     ConformedLayer,
     DownstreamProfile,
     FailureCode,
@@ -38,7 +37,6 @@ from oceanos.domain import (
     InputSet,
     LandMaskRef,
     LayerSource,
-    ObservationStatus,
     ProductSet,
     ProductSpec,
     ProvenanceAcolite,
@@ -81,7 +79,7 @@ from oceanos.publishing import (
 )
 from oceanos.publishing.release import FaultHook
 from oceanos.publishing.stac import build_item
-from oceanos.storage import StorageLayout
+from oceanos.storage import COG_MEDIA_TYPE, StorageLayout, artifact_ref, file_sha256
 from oceanos.timeseries import WHOLE_AOI_ZONE, zone_series
 
 BATHYMETRY_GLOB = "bathymetry/cudem/ncei19_*.tif"
@@ -91,7 +89,6 @@ USABLE_LABEL = (
 )
 RESTRICTED_LABEL = "No usable observation: display and pixel flags only; science layers withheld by the quality policy."
 RESTRICTED_PRODUCTS = ("true_colour", "l2_flags")
-COG_MEDIA = "image/tiff; application=geotiff; profile=cloud-optimized"
 OVERPASS_PLATFORMS = {"S2A", "S2B", "S2C"}
 
 StageHook = Callable[..., None]
@@ -123,21 +120,6 @@ def _analysis_mask_version(products: ProductSet, policy: QualityPolicy) -> str:
     cuts = {spec.product_key: spec.shallow_exclusion_m for spec in products.specs}
     canonical = json.dumps({"buffer": policy.coastal_buffer_m, "cuts": cuts}, sort_keys=True)
     return f"1-{sha256(canonical.encode()).hexdigest()[:12]}"
-
-
-def _file_sha256(path: Path) -> str:
-    digest = sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _artifact(path: Path, root: Path, role: str, media_type: str) -> ArtifactRef:
-    return ArtifactRef(
-        role=role, relpath=path.relative_to(root).as_posix(), sha256=_file_sha256(path),
-        size=path.stat().st_size, media_type=media_type,
-    )
 
 
 def _failure(code: FailureCode, stage: StageName, message: str, *, scope: FailureScope = FailureScope.OBSERVATION,
@@ -273,12 +255,12 @@ def publish_downstream(
         except ProductResolutionError as exc:
             raise raise_failure(StageName.CONFORM, _failure(
                 FailureCode.ACOLITE_MISSING_VARIABLE, StageName.CONFORM, str(exc),
-                evidence=[f"l2w={outputs.l2w.relpath}", f"l2r={outputs.l2r.relpath}"]))
+                evidence=[f"l2w={outputs.l2w.relpath}", f"l2r={outputs.l2r.relpath}"])) from exc
         except ConformError as exc:
             scope = FailureScope.BATCH if exc.code is FailureCode.GRID_MISALIGNED else FailureScope.OBSERVATION
             raise raise_failure(StageName.CONFORM, _failure(
                 exc.code, StageName.CONFORM, str(exc), scope=scope,
-                evidence=[f"grid_id={grid.grid_id}", f"l2w={outputs.l2w.relpath}"]))
+                evidence=[f"grid_id={grid.grid_id}", f"l2w={outputs.l2w.relpath}"])) from exc
         stage(StageName.CONFORM, RunState.CONFORMED, layers=len(layers))
 
         # P6 assess.
@@ -316,8 +298,8 @@ def publish_downstream(
                     write_true_colour(rgb_paths, conform_dir / "true_colour.tif", publication.true_colour)
                     write_cog(conform_dir / "true_colour.tif", target, publication.display)
                     assets.append(PublishedAsset(
-                        product_key=spec.product_key, href=target.name, sha256=_file_sha256(target),
-                        size=target.stat().st_size, media_type=COG_MEDIA, roles=("visual",), data_type="uint8",
+                        product_key=spec.product_key, href=target.name, sha256=file_sha256(target),
+                        size=target.stat().st_size, media_type=COG_MEDIA_TYPE, roles=("visual",), data_type="uint8",
                         overview_resampling=publication.display.overview_resampling,
                     ))
                     continue
@@ -325,15 +307,15 @@ def publish_downstream(
                 cog = publication.bitfield if spec.kind == "bitfield" else publication.continuous
                 write_cog(conform_dir / layer.raster.relpath, target, cog)
                 assets.append(PublishedAsset(
-                    product_key=spec.product_key, href=target.name, sha256=_file_sha256(target),
-                    size=target.stat().st_size, media_type=COG_MEDIA, roles=("data",), unit=layer.unit,
+                    product_key=spec.product_key, href=target.name, sha256=file_sha256(target),
+                    size=target.stat().st_size, media_type=COG_MEDIA_TYPE, roles=("data",), unit=layer.unit,
                     nodata=layer.nodata, data_type=layer.data_type, overview_resampling=cog.overview_resampling,
                     center_wavelength_nm=wavelength,
                 ))
             settings_copy = release_staging / "settings_resolved.txt"
             shutil.copy2(archive_root / outputs.settings_resolved.relpath, settings_copy)
             assets.append(PublishedAsset(
-                product_key="settings_resolved", href=settings_copy.name, sha256=_file_sha256(settings_copy),
+                product_key="settings_resolved", href=settings_copy.name, sha256=file_sha256(settings_copy),
                 size=settings_copy.stat().st_size, media_type="text/plain", roles=("metadata",),
             ))
 
@@ -357,7 +339,7 @@ def publish_downstream(
             scenes = {scene.scene_id: inputs.catalog.get_scene(scene.scene_id) for scene in inputs.input_set.scenes}
             provenance = _provenance(
                 inputs, observation_id, new_release_id, downstream, report, layers, rgb_variables, specs,
-                analysis_ref=AnalysisMaskRef(version=analysis_mask.version, sha256=_file_sha256(inputs.grid_dir / "analysis_mask.json")),
+                analysis_ref=AnalysisMaskRef(version=analysis_mask.version, sha256=file_sha256(inputs.grid_dir / "analysis_mask.json")),
                 scenes=scenes, published_at=published_at, usable=usable,
             )
             provenance_path = release_staging / "provenance.json"
@@ -366,8 +348,8 @@ def publish_downstream(
                 release_id=new_release_id, observation_id=observation_id, attempt_id=inputs.attempt_id,
                 run_key=inputs.run_key, downstream_profile_id=downstream.profile_id, tier=inputs.profile.ancillary_tier,
                 visibility="public" if usable else "restricted", assets=tuple(assets),
-                quality=_artifact(quality_path, release_staging, "quality", "application/json"),
-                provenance=_artifact(provenance_path, release_staging, "provenance", "application/json"),
+                quality=artifact_ref(quality_path, release_staging, "quality", "application/json"),
+                provenance=artifact_ref(provenance_path, release_staging, "provenance", "application/json"),
                 supersedes=inputs.current_release_id, created_at=published_at,
             )
             (release_staging / "release.json").write_text(release.model_dump_json(indent=2) + "\n", encoding="utf-8")
@@ -403,7 +385,7 @@ def publish_downstream(
         except OSError as exc:
             raise raise_failure(StageName.PUBLISH, _failure(
                 FailureCode.PUBLISH_IO_ERROR, StageName.PUBLISH, f"{type(exc).__name__}: {exc}", retryable=True,
-                evidence=[f"release_id={new_release_id}", f"path={getattr(exc, 'filename', None)}"]))
+                evidence=[f"release_id={new_release_id}", f"path={getattr(exc, 'filename', None)}"])) from exc
         stage(StageName.PUBLISH, RunState.PUBLISHED, release_id=new_release_id, visibility=release.visibility)
         return DownstreamResult(release_id=new_release_id, release_dir=release_dir, report=report)
     finally:
@@ -492,6 +474,6 @@ def archived_at(layout: StorageLayout, aoi_id: str, overpass_id: str, attempt_id
 
 
 __all__ = [
-    "BATHYMETRY_GLOB", "DownstreamInputs", "DownstreamResult", "ObservationStatus", "PipelineError",
-    "downstream_profile", "load_archived_outputs", "publish_downstream", "reference_data",
+    "DownstreamInputs", "DownstreamResult", "PipelineError", "archived_at", "downstream_profile",
+    "load_archived_outputs", "publish_downstream", "reference_data",
 ]
