@@ -1,0 +1,44 @@
+project_name: "NASA OCEANOS Puerto Rico"
+data_root: "data"
+# Component paths resolve from data_root; this puts STAC at catalog/catalog.json.
+catalog_dir: "../catalog"
+default_crs: "EPSG:4326" # mide en grados (esfera)
+
+# AOI de trabajo: W2C_South_AOI.kmz suministrado por el usuario (2026-09-16).
+aoi:
+  name: "W2C South 01/08"
+  path: "configs/aoi/w2c_south_01.geojson"
+  target_crs: "EPSG:32619" #mide en metros (plano) zona 19N
+
+# Fixed Sentinel-2 L1C discovery and whole-SAFE acquisition through CDSE.
+scenes:
+  provider: "cdse"
+  catalogue_url: "https://catalogue.dataspace.copernicus.eu/odata/v1"
+  download_url: "https://download.dataspace.copernicus.eu/odata/v1"
+  identity_url: "https://identity.dataspace.copernicus.eu/auth/realms/CDSE"
+  cloud_cover_max: null
+  timeout: 30
+  max_retries: 2
+  page_size: 100
+
+# Tier roots resolve from data_root. Work/archive/products share a filesystem.
+storage:
+  raw: "raw"
+  work: "work"
+  archive: "archive"
+  products: "products"
+  superseded: "superseded"
+  state: "state"
+  failed_workspace_retention_days: 14
+  superseded_releases_to_keep: 1
+
+# ACOLITE is invoked only through its pinned local subprocess installation.
+acolite:
+  python_executable: "~/micromamba/envs/acolite/bin/python"
+  launcher: "launch_acolite.py"
+  root: "~/acolite"
+  release_tag: "20260421.0"
+  commit_sha: "f73cbe73887c2b114d9d3c70865effee73871525"
+  luts_dir: "~/acolite/data/LUT"
+  external_dir: "data/external"
+  timeout_seconds: 1200

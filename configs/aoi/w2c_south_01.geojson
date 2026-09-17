@@ -1,0 +1,37 @@
+{
+  "type": "Feature",
+  "properties": {
+    "name": "W2C South 01/08",
+    "source": "configs/aoi/w2c_south.geojson dividido en 8 franjas por longitud (2026-09-16)",
+    "parent_aoi": "W2C South",
+    "slice": "1 de 8",
+    "boundary_status": "derived_from_user_kmz"
+  },
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [
+          -67.00559918782865,
+          17.83564401259682
+        ],
+        [
+          -67.00559918782865,
+          18.04741804112955
+        ],
+        [
+          -67.09176880642183,
+          18.0474154551636
+        ],
+        [
+          -67.09157290409667,
+          17.83572615854209
+        ],
+        [
+          -67.00559918782865,
+          17.83564401259682
+        ]
+      ]
+    ]
+  }
+}
